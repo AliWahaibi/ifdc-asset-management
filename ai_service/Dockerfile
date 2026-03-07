@@ -19,9 +19,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install python dependencies
 COPY requirements.txt .
 
-# Upgrade core Python build tools to patch vendored vulnerabilities hidden inside setuptools
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+# Install python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Surgically remove build tools (and their vendored vulnerabilities) since they are not needed at runtime
+RUN pip uninstall -y setuptools wheel
 
 # Copy application code
 COPY . .
