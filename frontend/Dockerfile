@@ -16,6 +16,9 @@ RUN npm run build
 # Stage 2: Serve the application with Nginx
 FROM nginx:alpine
 
+# Upgrade OS packages to patch vulnerabilities (e.g., zlib, libpng)
+RUN apk update && apk upgrade --no-cache
+
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
