@@ -27,6 +27,9 @@ WORKDIR /app
 # PATCH THE ALPINE BASE IMAGE FOR CVEs (e.g., zlib)
 RUN apk update && apk upgrade --no-cache
 
+# Force-upgrade the specific vulnerable package
+RUN apk add --no-cache --upgrade zlib
+
 # Import the user and group files from the builder
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
