@@ -20,7 +20,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function OfficeDashboard() {
     const { user } = useAuthStore();
-    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin_manager']) : false;
+    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
 
     const [reservationModalOpen, setReservationModalOpen] = useState(false);
@@ -186,9 +186,11 @@ export function OfficeDashboard() {
                     </h1>
                     <p className="mt-3 text-lg text-slate-400">Track office equipment, furniture, and IT assets.</p>
                 </div>
-                <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-violet-500/40 active:scale-[0.97]">
-                    <Plus className="h-4 w-4" /> Add Asset
-                </button>
+                {user && hasAnyRole(user.role, ['super_admin', 'admin', 'manager']) && (
+                    <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-violet-500/40 active:scale-[0.97]">
+                        <Plus className="h-4 w-4" /> Add Asset
+                    </button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

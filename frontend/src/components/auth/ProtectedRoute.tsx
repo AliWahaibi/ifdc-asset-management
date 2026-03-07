@@ -2,6 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import type { UserRole } from '@/types';
 import { hasAnyRole } from '@/lib/roles';
+import { UnauthorizedPage } from '@/pages/UnauthorizedPage';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
@@ -25,7 +26,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     }
 
     if (allowedRoles && !hasAnyRole(user.role, allowedRoles)) {
-        return <Navigate to="/unauthorized" replace />;
+        return <UnauthorizedPage />;
     }
 
     return <>{children}</>;

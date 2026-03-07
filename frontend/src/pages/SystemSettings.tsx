@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuthStore } from '@/stores/authStore';
 import { settingsService, SystemSetting } from '@/services/settingsService';
 import { Settings, Save, Building, Mail, Activity, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -119,10 +120,17 @@ export function SystemSettings() {
                 </div>
 
                 <div className="flex justify-end pt-2">
-                    <button type="submit" disabled={submitting} className="flex flex-1 sm:flex-none w-auto items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.98] disabled:opacity-50">
-                        <Save className="h-4 w-4" />
-                        {submitting ? 'Saving...' : 'Save Settings'}
-                    </button>
+                    {(() => {
+                        const { user } = useAuthStore.getState();
+                        const canEdit = user ? ['super_admin', 'admin'].includes(user.role) : false;
+                        if (!canEdit) return null;
+                        return (
+                            <button type="submit" disabled={submitting} className="flex flex-1 sm:flex-none w-auto items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.98] disabled:opacity-50">
+                                <Save className="h-4 w-4" />
+                                {submitting ? 'Saving...' : 'Save Settings'}
+                            </button>
+                        );
+                    })()}
                 </div>
             </form>
         </div>

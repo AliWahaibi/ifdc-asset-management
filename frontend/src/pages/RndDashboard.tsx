@@ -21,7 +21,7 @@ const TYPE_STYLES: Record<string, { label: string; color: string }> = {
 
 export function RndDashboard() {
     const { user } = useAuthStore();
-    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin_manager']) : false;
+    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
 
     const [reservationModalOpen, setReservationModalOpen] = useState(false);
@@ -226,9 +226,11 @@ export function RndDashboard() {
                     </h1>
                     <p className="mt-3 text-lg text-slate-400">V-TOL equipment, experimental prototypes, and R&D components.</p>
                 </div>
-                <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 active:scale-[0.97]">
-                    <Plus className="h-4 w-4" /> Add R&D Asset
-                </button>
+                {user && hasAnyRole(user.role, ['super_admin', 'admin', 'manager']) && (
+                    <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 active:scale-[0.97]">
+                        <Plus className="h-4 w-4" /> Add R&D Asset
+                    </button>
+                )}
             </div>
 
             {/* Classification Warning */}

@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 
 export function ReservationsDashboard() {
     const { user } = useAuthStore();
-    const canApprove = user ? hasAnyRole(user.role, ['super_admin', 'admin_manager']) : false;
+    const canApprove = user ? hasAnyRole(user.role, ['super_admin', 'admin', 'manager']) : false;
 
     const [activeTab, setActiveTab] = useState<'pending' | 'all'>(canApprove ? 'pending' : 'all');
     const [reservations, setReservations] = useState<Reservation[]>([]);

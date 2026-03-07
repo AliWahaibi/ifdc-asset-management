@@ -30,7 +30,7 @@ interface DashboardMetrics {
 
 export function UserDashboard() {
     const { user } = useAuthStore();
-    const isManager = user ? hasMinimumRole(user.role, 'admin_manager') : false;
+    const isManager = user ? hasMinimumRole(user.role, 'admin') : false;
 
     const [metrics, setMetrics] = useState<DashboardMetrics>({
         totalDrones: 0,

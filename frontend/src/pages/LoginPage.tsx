@@ -39,12 +39,12 @@ export function LoginPage() {
     };
 
     // Demo mode: Logs in using the real backend seeded database users
-    const handleDemoLogin = async (role: 'super_admin' | 'admin_manager' | 'editor_team_leader' | 'user_employee') => {
+    const handleDemoLogin = async (role: 'super_admin' | 'admin' | 'manager' | 'employee') => {
         const roleEmailMap = {
-            'super_admin': 'admin@ifdc.ae',
-            'admin_manager': 'manager@ifdc.ae',
-            'editor_team_leader': 'editor@ifdc.ae',
-            'user_employee': 'user@ifdc.ae'
+            'super_admin': 'superadmin@ifdc.ae',
+            'admin': 'admin@ifdc.ae',
+            'manager': 'manager@ifdc.ae',
+            'employee': 'employee@ifdc.ae'
         };
         const demoEmail = roleEmailMap[role];
         setEmail(demoEmail);
@@ -150,9 +150,9 @@ export function LoginPage() {
                     <div className="grid grid-cols-2 gap-2">
                         {([
                             { role: 'super_admin' as const, label: 'Super Admin', color: 'hover:border-rose-500/50 hover:text-rose-400' },
-                            { role: 'admin_manager' as const, label: 'Manager', color: 'hover:border-violet-500/50 hover:text-violet-400' },
-                            { role: 'editor_team_leader' as const, label: 'Team Leader', color: 'hover:border-cyan-500/50 hover:text-cyan-400' },
-                            { role: 'user_employee' as const, label: 'Employee', color: 'hover:border-emerald-500/50 hover:text-emerald-400' },
+                            { role: 'admin' as const, label: 'Manager', color: 'hover:border-violet-500/50 hover:text-violet-400' },
+                            { role: 'manager' as const, label: 'Team Leader', color: 'hover:border-cyan-500/50 hover:text-cyan-400' },
+                            { role: 'employee' as const, label: 'Employee', color: 'hover:border-emerald-500/50 hover:text-emerald-400' },
                         ]).map((demo) => (
                             <button
                                 key={demo.role}

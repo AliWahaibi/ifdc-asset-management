@@ -45,7 +45,7 @@ export function App() {
                     <Route
                         path="/operations"
                         element={
-                            <ProtectedRoute allowedRoles={['super_admin', 'admin_manager', 'editor_team_leader']}>
+                            <ProtectedRoute>
                                 <OperationsDashboard />
                             </ProtectedRoute>
                         }
@@ -55,7 +55,7 @@ export function App() {
                     <Route
                         path="/office"
                         element={
-                            <ProtectedRoute allowedRoles={['super_admin', 'admin_manager', 'editor_team_leader']}>
+                            <ProtectedRoute>
                                 <OfficeDashboard />
                             </ProtectedRoute>
                         }
@@ -65,7 +65,7 @@ export function App() {
                     <Route
                         path="/rnd"
                         element={
-                            <ProtectedRoute allowedRoles={['super_admin', 'admin_manager', 'editor_team_leader']}>
+                            <ProtectedRoute>
                                 <RndDashboard />
                             </ProtectedRoute>
                         }
@@ -81,31 +81,31 @@ export function App() {
                         }
                     />
 
-                    {/* User Management — Super Admin, Manager */}
+                    {/* User Management — Super Admin, Admin */}
                     <Route
                         path="/users"
                         element={
-                            <ProtectedRoute allowedRoles={['super_admin', 'admin_manager']}>
+                            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
                                 <UsersDashboard />
                             </ProtectedRoute>
                         }
                     />
 
-                    {/* System Settings — Super Admin only */}
+                    {/* System Settings — Super Admin, Admin */}
                     <Route
                         path="/settings"
                         element={
-                            <ProtectedRoute allowedRoles={['super_admin']}>
+                            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
                                 <SystemSettings />
                             </ProtectedRoute>
                         }
                     />
 
-                    {/* Analytics — Super Admin, Manager */}
+                    {/* Analytics — Super Admin, Admin */}
                     <Route
                         path="/statistics"
                         element={
-                            <ProtectedRoute allowedRoles={['super_admin', 'admin_manager']}>
+                            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
                                 <StatisticsDashboard />
                             </ProtectedRoute>
                         }

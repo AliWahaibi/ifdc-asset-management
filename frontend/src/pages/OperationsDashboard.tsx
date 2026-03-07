@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 
 export function OperationsDashboard() {
     const { user } = useAuthStore();
-    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin_manager']) : false;
+    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
 
     const [reservationModalOpen, setReservationModalOpen] = useState(false);
@@ -212,13 +212,15 @@ export function OperationsDashboard() {
                         Manage drone assets, track flight hours, and schedule maintenance.
                     </p>
                 </div>
-                <button
-                    onClick={() => setModalOpen(true)}
-                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.97]"
-                >
-                    <Plus className="h-4 w-4" />
-                    Add Drone
-                </button>
+                {user && hasAnyRole(user.role, ['super_admin', 'admin', 'manager']) && (
+                    <button
+                        onClick={() => setModalOpen(true)}
+                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.97]"
+                    >
+                        <Plus className="h-4 w-4" />
+                        Add Drone
+                    </button>
+                )}
             </div>
 
             {/* Stats */}

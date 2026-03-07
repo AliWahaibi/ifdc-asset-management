@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuthStore } from '@/stores/authStore';
 import { Users, Plus, UploadCloud, FileText } from 'lucide-react';
 import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -22,7 +23,7 @@ export function UsersDashboard() {
         full_name: '',
         email: '',
         password: '',
-        role: 'user_employee' as UserRole,
+        role: 'employee' as UserRole,
         position: '',
         cv_file: null as File | null,
         id_card_file: null as File | null,
@@ -106,40 +107,49 @@ export function UsersDashboard() {
             sortable: false,
             render: (row) => (
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => {
-                            setEditingId(row.id);
-                            setFormData({
-                                full_name: row.full_name,
-                                email: row.email,
-                                password: '', // Leave blank for edit unless changing
-                                role: row.role,
-                                position: row.position || '',
-                                cv_file: null,
-                                id_card_file: null,
-                            });
-                            setModalOpen(true);
-                        }}
-                        className="text-xs font-medium text-slate-400 hover:text-cyan-400 transition-colors"
-                    >
-                        Edit
-                    </button>
-                    <button
-                        onClick={async () => {
-                            if (window.confirm('Are you sure you want to delete this user?')) {
-                                try {
-                                    await userService.deleteUser(row.id);
-                                    toast.success('User deleted successfully');
-                                    fetchUsers();
-                                } catch (e) {
-                                    toast.error('Failed to delete user');
-                                }
-                            }
-                        }}
-                        className="text-xs font-medium text-slate-400 hover:text-rose-400 transition-colors"
-                    >
-                        Delete
-                    </button>
+                    {(() => {
+                        const { user } = useAuthStore.getState();
+                        const canEdit = user ? ['super_admin', 'admin'].includes(user.role) : false;
+                        if (!canEdit) return <span className="text-xs text-slate-500">View Only</span>;
+                        return (
+                            <>
+                                <button
+                                    onClick={() => {
+                                        setEditingId(row.id);
+                                        setFormData({
+                                            full_name: row.full_name,
+                                            email: row.email,
+                                            password: '', // Leave blank for edit unless changing
+                                            role: row.role,
+                                            position: row.position || '',
+                                            cv_file: null,
+                                            id_card_file: null,
+                                        });
+                                        setModalOpen(true);
+                                    }}
+                                    className="text-xs font-medium text-slate-400 hover:text-cyan-400 transition-colors"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (window.confirm('Are you sure you want to delete this user?')) {
+                                            try {
+                                                await userService.deleteUser(row.id);
+                                                toast.success('User deleted successfully');
+                                                fetchUsers();
+                                            } catch (e) {
+                                                toast.error('Failed to delete user');
+                                            }
+                                        }
+                                    }}
+                                    className="text-xs font-medium text-slate-400 hover:text-rose-400 transition-colors"
+                                >
+                                    Delete
+                                </button>
+                            </>
+                        );
+                    })()}
                 </div>
             )
         }
@@ -184,7 +194,7 @@ export function UsersDashboard() {
             setModalOpen(false);
             setEditingId(null);
             setFormData({
-                full_name: '', email: '', password: '', role: 'user_employee', position: '', cv_file: null, id_card_file: null
+                full_name: '', email: '', password: '', role: 'employee', position: '', cv_file: null, id_card_file: null
             });
             fetchUsers();
         } catch (error) {
@@ -209,13 +219,20 @@ export function UsersDashboard() {
                         Manage personnel, roles, and securely upload identity documents.
                     </p>
                 </div>
-                <button
-                    onClick={() => setModalOpen(true)}
-                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.97]"
-                >
-                    <Plus className="h-4 w-4" />
-                    Add User
-                </button>
+                {(() => {
+                    const { user } = useAuthStore.getState();
+                    const canEdit = user ? ['super_admin', 'admin'].includes(user.role) : false;
+                    if (!canEdit) return null;
+                    return (
+                        <button
+                            onClick={() => setModalOpen(true)}
+                            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.97]"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Add User
+                        </button>
+                    );
+                })()}
             </div>
 
             {/* Table */}
@@ -237,7 +254,7 @@ export function UsersDashboard() {
                 setModalOpen(false);
                 setEditingId(null);
                 setFormData({
-                    full_name: '', email: '', password: '', role: 'user_employee', position: '', cv_file: null, id_card_file: null
+                    full_name: '', email: '', password: '', role: 'employee', position: '', cv_file: null, id_card_file: null
                 });
             }} title={editingId ? "Edit User" : "Add New User"} size="lg">
                 <form className="space-y-5" onSubmit={handleSubmit}>
@@ -260,9 +277,9 @@ export function UsersDashboard() {
                             <label className="mb-2 block text-sm font-medium text-slate-200">System Role</label>
                             <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
                                 <option value="super_admin">Super Admin</option>
-                                <option value="admin_manager">Admin / Manager</option>
-                                <option value="editor_team_leader">Editor / Team Leader</option>
-                                <option value="user_employee">User / Employee</option>
+                                <option value="admin">Admin</option>
+                                <option value="manager">Manager</option>
+                                <option value="employee">Employee</option>
                             </select>
                         </div>
                         <div className="sm:col-span-2">
@@ -292,7 +309,7 @@ export function UsersDashboard() {
                             setModalOpen(false);
                             setEditingId(null);
                             setFormData({
-                                full_name: '', email: '', password: '', role: 'user_employee', position: '', cv_file: null, id_card_file: null
+                                full_name: '', email: '', password: '', role: 'employee', position: '', cv_file: null, id_card_file: null
                             });
                         }} className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-400 hover:bg-slate-800">Cancel</button>
                         <button type="submit" disabled={submitting} className="rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
