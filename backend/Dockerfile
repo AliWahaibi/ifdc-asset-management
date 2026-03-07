@@ -24,6 +24,9 @@ FROM alpine:latest
 
 WORKDIR /app
 
+# PATCH THE ALPINE BASE IMAGE FOR CVEs (e.g., zlib)
+RUN apk update && apk upgrade --no-cache
+
 # Import the user and group files from the builder
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
