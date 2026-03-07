@@ -19,10 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install python dependencies
 COPY requirements.txt .
 
-# Force-upgrade vulnerable transitive dependencies caught by Trivy
-RUN pip install --no-cache-dir --upgrade "wheel>=0.46.2" "jaraco.context>=6.1.0"
-
-RUN pip install --no-cache-dir --upgrade pip && \
+# Upgrade core Python build tools to patch vendored vulnerabilities hidden inside setuptools
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
