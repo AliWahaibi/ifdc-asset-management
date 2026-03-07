@@ -27,8 +27,8 @@ WORKDIR /app
 # PATCH THE ALPINE BASE IMAGE FOR CVEs (e.g., zlib)
 RUN apk update && apk upgrade --no-cache
 
-# Force-upgrade the specific vulnerable package
-RUN apk add --no-cache --upgrade zlib
+# Force-upgrade zlib directly from the bleeding-edge repository to bypass the unpatched stable channel
+RUN apk add --no-cache --upgrade zlib --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
 # Import the user and group files from the builder
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
