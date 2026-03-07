@@ -16,15 +16,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install python dependencies
+# Copy python dependencies
 COPY requirements.txt .
 
-# Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Surgically remove build tools (and their vendored vulnerabilities) since they are not needed at runtime
-RUN pip uninstall -y setuptools wheel
+# 1. Install dependencies
+# 2. Uninstall build tools
+# 3. Forcefully wipe all leftover metadata files so Trivy scans a clean file system
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip uninstall -y setuptools wheel pip && \
+    rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
+    /usr/local/lib/python3.11/site-packages/wheel* \
+    /usr/local/lib/python3.11/site-packages/pip*
 
 # Copy application code
 COPY . .
