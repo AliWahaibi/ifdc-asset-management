@@ -19,14 +19,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy python dependencies
 COPY requirements.txt .
 
-# 1. Install dependencies
-# 2. Uninstall build tools
-# 3. Forcefully wipe all leftover metadata files so Trivy scans a clean file system
+# 1. Install requirements
+# 2. Bypass pip entirely and nuke the vulnerable package folders directly from the filesystem
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip uninstall -y setuptools wheel pip && \
-    rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
-    /usr/local/lib/python3.11/site-packages/wheel* \
-    /usr/local/lib/python3.11/site-packages/pip*
+    rm -rf /usr/local/lib/python3.11/site-packages/setuptools \
+           /usr/local/lib/python3.11/site-packages/setuptools-* \
+           /usr/local/lib/python3.11/site-packages/wheel \
+           /usr/local/lib/python3.11/site-packages/wheel-* \
+           /usr/local/lib/python3.11/site-packages/pip \
+           /usr/local/lib/python3.11/site-packages/pip-*
 
 # Copy application code
 COPY . .
