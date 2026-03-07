@@ -1,0 +1,229 @@
+package handlers
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"time"
+
+	"ifdc-backend/internal/database"
+	"ifdc-backend/internal/models"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+)
+
+// GetUsers retrieves a paginated list of users
+func GetUsers(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
+
+	var users []models.User
+	var total int64
+
+	if err := database.DB.Model(&models.User{}).Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count users"})
+		return
+	}
+
+	if err := database.DB.Offset(offset).Limit(limit).Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  users,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+// UploadUserFiles handles multipart/form-data for creating or updating a user
+func UploadUserFiles(c *gin.Context) {
+	// 1. Parse the multipart form
+	// 10 MB limit for parsing the form
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse multipart form"})
+		return
+	}
+
+	// 2. Extract standard text fields (e.g. email, full_name, role)
+	email := c.PostForm("email")
+	fullName := c.PostForm("full_name")
+
+	if email == "" || fullName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email and full_name are required"})
+		return
+	}
+
+	// Check if this is an update (PUT) or creation (POST)
+	userID := c.Param("id")
+	isUpdate := userID != ""
+
+	var user models.User
+	if isUpdate {
+		if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		user.Email = email
+		user.FullName = fullName
+	} else {
+		user = models.User{
+			ID:       uuid.New().String(),
+			Email:    email,
+			FullName: fullName,
+		}
+	}
+
+	// 3. Setup upload directory
+	uploadDir := "./uploads/users"
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
+		return
+	}
+
+	// 4. Handle CV File
+	cvFile, cvHeader, err := c.Request.FormFile("cv_file")
+	if err == nil {
+		defer cvFile.Close()
+
+		// Validate type
+		if !isValidMimeType(cvHeader.Header.Get("Content-Type")) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type for CV"})
+			return
+		}
+
+		filename := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), filepath.Ext(cvHeader.Filename))
+		savePath := filepath.Join(uploadDir, filename)
+
+		out, err := os.Create(savePath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save CV file"})
+			return
+		}
+		defer out.Close()
+		io.Copy(out, cvFile)
+
+		// Save the relative URL path
+		user.CVUrl = fmt.Sprintf("/uploads/users/%s", filename)
+	}
+
+	// 5. Handle ID Card File
+	idFile, idHeader, err := c.Request.FormFile("id_card_file")
+	if err == nil {
+		defer idFile.Close()
+
+		// Validate type
+		if !isValidMimeType(idHeader.Header.Get("Content-Type")) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type for ID card"})
+			return
+		}
+
+		filename := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), filepath.Ext(idHeader.Filename))
+		savePath := filepath.Join(uploadDir, filename)
+
+		out, err := os.Create(savePath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save ID card file"})
+			return
+		}
+		defer out.Close()
+		io.Copy(out, idFile)
+
+		// Save the relative URL path
+		user.IDCardUrl = fmt.Sprintf("/uploads/users/%s", filename)
+	}
+
+	position := c.PostForm("position")
+	if position != "" {
+		user.Position = position
+	}
+
+	phone := c.PostForm("phone")
+	if phone != "" {
+		user.Phone = phone
+	}
+
+	rawPassword := c.PostForm("password")
+	if rawPassword != "" {
+		hasher := sha256.New()
+		hasher.Write([]byte(rawPassword))
+		user.PasswordHash = hex.EncodeToString(hasher.Sum(nil))
+	} else if !isUpdate {
+		// Provide default only on new creations if omitted
+		hasher := sha256.New()
+		hasher.Write([]byte("password"))
+		user.PasswordHash = hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	role := c.PostForm("role")
+	if role != "" {
+		user.Role = role
+	} else if !isUpdate {
+		user.Role = "user_employee" // default for creations
+	}
+
+	if isUpdate {
+		if err := database.DB.Save(&user).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user in database"})
+			return
+		}
+		c.JSON(http.StatusOK, user)
+	} else {
+		if err := database.DB.Create(&user).Error; err != nil {
+			if database.IsUniqueConstraintError(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "A user with this email already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user in database"})
+			return
+		}
+		c.JSON(http.StatusCreated, user)
+	}
+}
+
+// DeleteUser deletes a user by ID
+func DeleteUser(c *gin.Context) {
+	id := c.Param("id")
+
+	// Ensure the user exists
+	var user models.User
+	if err := database.DB.First(&user, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Delete from database (Soft delete because models.User has gorm.DeletedAt)
+	if err := database.DB.Delete(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+}
+
+// Helper to validate MIME types
+func isValidMimeType(mime string) bool {
+	allowed := map[string]bool{
+		"application/pdf": true,
+		"image/jpeg":      true,
+		"image/png":       true,
+	}
+	return allowed[mime]
+}

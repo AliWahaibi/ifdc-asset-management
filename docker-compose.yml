@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      # Do not hardcode secrets, instruct the use of a .env file!
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ifdc_assets}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ifdc_assets}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  go-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: go_backend
+    environment:
+      # Connect to Postgres container
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DB_NAME=${POSTGRES_DB:-ifdc_assets}
+      - AI_SERVICE_URL=http://python-ai:8000
+      - JWT_SECRET=${JWT_SECRET:-your_dev_jwt_secret_change_in_prod}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  python-ai:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: python_ai
+    environment:
+      # Map to Postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ifdc_assets}
+      - ENVIRONMENT=production
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  react-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: react_frontend
+    environment:
+      - VITE_API_BASE_URL=/api
+    ports:
+      - "80:80"
+    depends_on:
+      - go-backend
+      - python-ai
+    networks:
+      - app_network
+
+volumes:
+  postgres_data:
+
+
+networks:
+  app_network:
+    driver: bridge
+
+# Instructions:
+# Create a .env file in the root directory mapping variables:
+# POSTGRES_USER=myuser
+# POSTGRES_PASSWORD=mypassword
+# POSTGRES_DB=ifdc_assets
+# JWT_SECRET=mysecret

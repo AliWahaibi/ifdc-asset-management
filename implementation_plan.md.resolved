@@ -1,0 +1,152 @@
+# IFDC Asset Management Platform — Phase 1 Implementation Plan
+
+## Overview
+
+Build the foundational architecture for a secure, scalable asset management system for the Ibn Firnas Drone Center. Phase 1 covers: project scaffolding, PostgreSQL relational schema, JWT authentication, and RBAC middleware.
+
+**Tech Stack:** Go (Gin) · React (Vite + TypeScript + Tailwind CSS v4) · PostgreSQL · JWT
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> The existing `frontend/` was scaffolded with plain JavaScript. This plan **deletes and re-scaffolds** it with TypeScript + Tailwind CSS. If you want to keep the existing JS scaffold, let me know.
+
+> [!IMPORTANT]
+> The Go backend will use the **Gin** framework (most mature ecosystem, middleware-friendly, excellent community). If you prefer **Fiber** instead, let me know before I proceed.
+
+---
+
+## Proposed Changes
+
+### 1. Project Folder Structure
+
+```
+IFDC asssets website/
+├── backend/
+│   ├── cmd/
+│   │   └── server/
+│   │       └── main.go              # Entry point
+│   ├── internal/
+│   │   ├── config/
+│   │   │   └── config.go            # Env/config loader
+│   │   ├── database/
+│   │   │   └── postgres.go          # DB connection pool
+│   │   ├── handlers/
+│   │   │   ├── auth.go              # Login, Register, Refresh
+│   │   │   ├── user.go              # User CRUD
+│   │   │   ├── operation.go         # Drone/Operation CRUD
+│   │   │   ├── office.go            # Office asset CRUD
+│   │   │   └── rnd.go               # R&D asset CRUD
+│   │   ├── middleware/
+│   │   │   ├── auth.go              # JWT verification
+│   │   │   └── rbac.go              # Role-level authorization
+│   │   ├── models/
+│   │   │   ├── user.go
+│   │   │   ├── operation.go
+│   │   │   ├── office.go
+│   │   │   ├── rnd.go
+│   │   │   └── reservation.go
+│   │   └── routes/
+│   │       └── routes.go            # Route definitions with role guards
+│   ├── migrations/
+│   │   └── 001_initial_schema.sql   # Full DDL
+│   ├── .env.example                 # Template for secrets
+│   ├── go.mod
+│   └── go.sum
+├── frontend/                        # Re-scaffolded with Vite + TS + Tailwind
+└── README.md
+```
+
+---
+
+### 2. PostgreSQL Schema (DDL)
+
+#### [NEW] [001_initial_schema.sql](file:///d:/projects/IFDC%20asssets%20website/backend/migrations/001_initial_schema.sql)
+
+**Enums:**
+- `user_role` → `super_admin`, `admin_manager`, `editor_team_leader`, `user_employee`
+- `asset_status` → `available`, `in_use`, `maintenance`, `retired`, `reserved`
+- `maintenance_status` → `pending`, `in_progress`, `completed`
+- `reservation_status` → `pending`, `approved`, `rejected`, `returned`
+
+**Tables:**
+
+| Table | Purpose | Key Columns |
+|---|---|---|
+| `departments` | Org structure | `id`, `name`, `description` |
+| `users` | All user data + RBAC | `id`, `email`, `password_hash`, `role`, `department_id`, `full_name`, `position`, `phone`, `whatsapp`, `vehicle_license_number`, `vehicle_license_expiry`, `cv_url`, `id_card_url` |
+| `drone_assets` | Operation category | `id`, `name`, `serial_number`, `model`, `status`, `department_id`, `total_flight_hours`, `last_maintenance_date`, `next_maintenance_date` |
+| `drone_maintenance_logs` | Maintenance history | `id`, `drone_asset_id`, `performed_by`, `status`, `description`, `started_at`, `completed_at` |
+| `office_assets` | Office category | `id`, `name`, `category` (furniture/printer/laptop/etc), `serial_number`, `status`, `department_id`, `assigned_to`, `purchase_date`, `warranty_expiry` |
+| `rnd_assets` | R&D / V-TOL | `id`, `name`, `asset_type` (vtol/experimental/prototype/component), `serial_number`, `status`, `department_id`, `specifications` (JSONB), `is_classified` |
+| `reservations` | Cross-category booking | `id`, `user_id`, `asset_type` (drone/office/rnd), `asset_id`, `status`, `requested_at`, `approved_by`, `approved_at`, `start_date`, `end_date`, `notes` |
+| `refresh_tokens` | JWT token management | `id`, `user_id`, `token_hash`, `expires_at`, `revoked` |
+
+All tables include `created_at` / `updated_at` timestamps and proper indexes on foreign keys, emails, serial numbers.
+
+---
+
+### 3. Go Backend Implementation
+
+#### [NEW] [main.go](file:///d:/projects/IFDC%20asssets%20website/backend/cmd/server/main.go)
+Entry point: loads config, connects to DB, registers routes, starts Gin server.
+
+#### [NEW] [config.go](file:///d:/projects/IFDC%20asssets%20website/backend/internal/config/config.go)
+Loads `.env` via `godotenv`; exposes typed `Config` struct with `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `JWT_EXPIRY`, `SERVER_PORT`.
+
+#### [NEW] [postgres.go](file:///d:/projects/IFDC%20asssets%20website/backend/internal/database/postgres.go)
+Creates and returns a `*sql.DB` pool using `lib/pq`; includes connection retry logic.
+
+#### [NEW] Go Models (`internal/models/`)
+Go structs with [json](file:///d:/projects/IFDC%20asssets%20website/frontend/package.json) and `db` tags mapping 1:1 to every table listed above.
+
+#### [NEW] Auth Handler (`internal/handlers/auth.go`)
+- `POST /api/auth/register` — hash password (bcrypt), create user, return JWT
+- `POST /api/auth/login` — verify credentials, issue access + refresh tokens
+- `POST /api/auth/refresh` — validate refresh token, issue new access token
+
+#### [NEW] Auth Middleware (`internal/middleware/auth.go`)
+- Extracts `Authorization: Bearer <token>` header
+- Validates JWT signature & expiry using `golang-jwt/jwt/v5`
+- Injects `userID` and `userRole` into Gin context
+
+#### [NEW] RBAC Middleware (`internal/middleware/rbac.go`)
+- `RequireRole(allowedRoles ...string)` — returns a Gin handler that checks if the authenticated user's role is in the allowed set
+- Role hierarchy: `super_admin` > `admin_manager` > `editor_team_leader` > `user_employee`
+
+#### [NEW] Routes (`internal/routes/routes.go`)
+Route groups with middleware applied per group:
+- `/api/auth/*` — public
+- `/api/users/*` — `super_admin`, `admin_manager`
+- `/api/operations/*` — all authenticated, write restricted
+- `/api/office/*` — all authenticated, write restricted
+- `/api/rnd/*` — `super_admin`, `admin_manager`, `editor_team_leader`
+
+#### [NEW] [.env.example](file:///d:/projects/IFDC%20asssets%20website/backend/.env.example)
+Template with placeholder values for all environment variables.
+
+---
+
+### 4. Frontend Re-scaffold
+
+#### [DELETE + NEW] `frontend/`
+- Delete existing JS scaffold
+- Re-create with: `npx -y create-vite@latest ./ -- --template react-ts`
+- Install Tailwind CSS v4: `npm install tailwindcss @tailwindcss/vite`
+- Configure Vite plugin and CSS import
+- Create a basic login page to demonstrate the auth flow
+
+---
+
+## Verification Plan
+
+### Automated Tests
+1. **Go compilation check**: `cd backend && go build ./...` — must compile with zero errors
+2. **SQL syntax validation**: Review the DDL manually for correctness (no live DB required in Phase 1)
+
+### Manual Verification
+1. **Folder structure**: Verify the `backend/` and `frontend/` trees match the plan
+2. **Frontend dev server**: Run `cd frontend && npm run dev` — should start without errors
+3. **Code review**: User reviews the generated schema, models, and middleware for correctness and completeness

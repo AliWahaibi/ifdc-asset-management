@@ -1,0 +1,8 @@
+﻿src/pages/OfficeDashboard.tsx(22,5): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/pages/OfficeDashboard.tsx(105,20): error TS1005: ';' expected.
+src/pages/OperationsDashboard.tsx(14,5): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/pages/OperationsDashboard.tsx(98,24): error TS1005: ';' expected.
+src/pages/RndDashboard.tsx(23,5): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/pages/RndDashboard.tsx(118,17): error TS1005: ';' expected.
+src/pages/UsersDashboard.tsx(14,5): error TS1005: '(' expected.
+src/pages/UsersDashboard.tsx(73,4): error TS1005: '=>' expected.
