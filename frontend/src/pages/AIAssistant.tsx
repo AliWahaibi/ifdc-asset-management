@@ -47,7 +47,8 @@ export function AIAssistant() {
         setIsLoading(true);
 
         try {
-            const res = await axios.post('http://localhost:8000/api/ai/chat', { message: trimmed });
+            const aiServiceUrl = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000';
+            const res = await axios.post(`${aiServiceUrl}/api/ai/chat`, { message: trimmed });
             const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'ai', content: res.data.response };
             setMessages(prev => [...prev, aiMsg]);
         } catch (error) {

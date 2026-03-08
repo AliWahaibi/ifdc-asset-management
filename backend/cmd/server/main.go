@@ -21,6 +21,9 @@ func SetupRouter() *gin.Engine {
 	// This allows the frontend to load the uploaded CVs and ID cards via URL
 	r.Static("/uploads", "./uploads")
 
+	// Apply CORS Middleware globally
+	r.Use(middleware.CORSMiddleware())
+
 	// Global default rate limiting (e.g. 100 req per minute)
 	r.Use(middleware.RateLimiter(rate.Every(time.Minute/100), 100))
 

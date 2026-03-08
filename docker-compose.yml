@@ -35,6 +35,8 @@ services:
       - DB_NAME=${POSTGRES_DB:-ifdc_assets}
       - AI_SERVICE_URL=http://python-ai:8000
       - JWT_SECRET=${JWT_SECRET:-your_dev_jwt_secret_change_in_prod}
+      # CORS Allowed Origins
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:80}
     ports:
       - "8080:8080"
     depends_on:
@@ -64,9 +66,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
+        - VITE_AI_SERVICE_URL=${VITE_AI_SERVICE_URL:-http://localhost:8000}
     container_name: react_frontend
     environment:
-      - VITE_API_BASE_URL=/api
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
+      - VITE_AI_SERVICE_URL=${VITE_AI_SERVICE_URL:-http://localhost:8000}
     ports:
       - "80:80"
     depends_on:
