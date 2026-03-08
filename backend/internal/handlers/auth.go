@@ -10,6 +10,7 @@ import (
 	"ifdc-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type LoginRequest struct {
@@ -30,13 +31,24 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	hasher := sha256.New()
-	hasher.Write([]byte(req.Password))
-	hashedPassword := hex.EncodeToString(hasher.Sum(nil))
+	// Check if the stored hash is a bcrypt hash
+	_, err := bcrypt.Cost([]byte(user.PasswordHash))
+	if err == nil {
+		// It is a bcrypt hash, verify using bcrypt
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+			return
+		}
+	} else {
+		// Not a bcrypt hash, assume SHA-256 (legacy)
+		hasher := sha256.New()
+		hasher.Write([]byte(req.Password))
+		hashedPassword := hex.EncodeToString(hasher.Sum(nil))
 
-	if user.PasswordHash != hashedPassword {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
-		return
+		if user.PasswordHash != hashedPassword {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

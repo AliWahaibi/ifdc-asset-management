@@ -9,9 +9,16 @@ import (
 	"encoding/hex"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func SeedUsers() {
+	// Check if users table is empty to determine if we should seed the default admin
+	var userCount int64
+	if err := DB.Model(&models.User{}).Count(&userCount).Error; err != nil {
+		log.Printf("Failed to count users: %v", err)
+	}
+
 	// Loop through all users and migrate plaintext passwords to SHA-256
 	var existingUsers []models.User
 	if err := DB.Find(&existingUsers).Error; err == nil {
@@ -62,6 +69,34 @@ func SeedUsers() {
 		} else {
 			log.Println("Default system settings seeded successfully.")
 		}
+	}
+
+	// If users table was empty, seed default admin user and skip demo users
+	if userCount == 0 {
+		log.Println("No users found. Seeding default admin user...")
+
+		// Generate bcrypt hash for "admin123"
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		if err != nil {
+			log.Fatalf("Failed to hash password: %v", err)
+		}
+
+		admin := models.User{
+			ID:           uuid.New().String(),
+			Email:        "admin@ifdc.com",
+			FullName:     "System Administrator",
+			Role:         "super_admin",
+			PasswordHash: string(hashedPassword),
+			Status:       "active",
+			IsApproved:   true,
+		}
+
+		if err := DB.Create(&admin).Error; err != nil {
+			log.Fatalf("Failed to seed admin user: %v", err)
+		}
+
+		log.Println("Default admin user seeded successfully.")
+		return
 	}
 
 	// Hash a default password: "password123"
