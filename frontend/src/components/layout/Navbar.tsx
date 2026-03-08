@@ -1,18 +1,10 @@
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_LABELS } from '@/lib/roles';
-import { Bell, LogOut, Search, Clock, User, Monitor, Settings, Box, Database, Plane, Calendar, Menu } from 'lucide-react';
+import { LogOut, Search, User, Monitor, Box, Database, Plane, Calendar, Menu } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api';
 import { useDebounce } from '@/hooks/useDebounce';
-
-interface Notification {
-    id: number;
-    title: string;
-    message: string;
-    is_read: boolean;
-    created_at: string;
-}
 
 interface SearchResult {
     id: string;
@@ -29,8 +21,6 @@ interface NavbarProps {
 export function Navbar({ onMenuClick }: NavbarProps) {
     const { user, logout } = useAuthStore();
     const navigate = useNavigate();
-    const [notifications, setNotifications] = useState<Notification[]>([]);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
@@ -39,31 +29,6 @@ export function Navbar({ onMenuClick }: NavbarProps) {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
     const debouncedSearchQuery = useDebounce(searchQuery, 300);
-
-    useEffect(() => {
-        if (!user) return;
-        const fetchNotifications = async () => {
-            try {
-                const res = await apiClient.get('/notifications');
-                setNotifications(res.data || []);
-            } catch (err) {
-                console.error("Failed to fetch notifications");
-            }
-        };
-
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
-    }, [user]);
-
-    const handleMarkAsRead = async (id: number) => {
-        try {
-            await apiClient.patch(`/notifications/${id}/read`);
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-        } catch (err) {
-            console.error("Failed to mark as read");
-        }
-    };
 
     // Search API call
     useEffect(() => {
@@ -184,64 +149,6 @@ export function Navbar({ onMenuClick }: NavbarProps) {
 
             {/* Right side */}
             <div className="flex items-center gap-2">
-                {/* Notifications */}
-                <div className="relative group">
-                    <button
-                        className="relative rounded-xl p-2.5 text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-slate-200 focus:outline-none cursor-pointer"
-                        onMouseEnter={() => setIsMenuOpen(true)}
-                        onMouseLeave={() => setIsMenuOpen(false)}
-                    >
-                        <Bell className="h-5 w-5" />
-                        {notifications.some(n => !n.is_read) && (
-                            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-slate-950 animate-pulse" />
-                        )}
-                    </button>
-                    {isMenuOpen && (
-                        <div
-                            className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-white/10 bg-black/80 backdrop-blur-xl p-2 shadow-2xl transition-all z-50 text-white"
-                            onMouseEnter={() => setIsMenuOpen(true)}
-                            onMouseLeave={() => setIsMenuOpen(false)}
-                        >
-                            <div className="flex items-center justify-between px-3 py-2">
-                                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Notifications</p>
-                                <span className="rounded-full bg-slate-800/50 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                                    {notifications.filter(n => !n.is_read).length} Unread
-                                </span>
-                            </div>
-                            <div className="mt-1 max-h-80 overflow-y-auto space-y-1 pr-1">
-                                {notifications.length === 0 ? (
-                                    <div className="p-4 text-center text-sm text-slate-500">
-                                        No new notifications
-                                    </div>
-                                ) : (
-                                    notifications.map((n) => (
-                                        <div
-                                            key={n.id}
-                                            onClick={() => !n.is_read && handleMarkAsRead(n.id)}
-                                            className={`rounded-lg p-3 text-sm transition-colors cursor-pointer ${n.is_read ? 'bg-transparent hover:bg-white/[0.02] text-slate-400' : 'bg-white/[0.05] hover:bg-white/[0.08] text-slate-200 shadow-inner'}`}
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <p className={`font-medium ${n.is_read ? 'text-slate-400' : 'text-white'}`}>{n.title}</p>
-                                                {!n.is_read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />}
-                                            </div>
-                                            <p className={`mt-1 text-xs ${n.is_read ? 'text-slate-500' : 'text-slate-300'}`}>
-                                                {n.message}
-                                            </p>
-                                            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500">
-                                                <Clock className="h-3 w-3" />
-                                                {new Date(n.created_at).toLocaleDateString()}
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Divider */}
-                <div className="mx-2 h-8 w-px bg-slate-800" />
-
                 {/* User */}
                 <NavLink to="/profile" className="flex items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-white/[0.03]">
                     <div className="hidden text-right sm:block">
