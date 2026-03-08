@@ -62,7 +62,12 @@ export function UsersDashboard() {
         {
             key: 'role',
             header: 'Role',
-            render: (row) => <span className="text-cyan-400">{ROLE_LABELS[row.role] ?? row.role}</span>,
+            render: (row) => {
+                const label = ROLE_LABELS[row.role as UserRole];
+                if (label) return <span className="text-cyan-400">{label}</span>;
+                const formatted = row.role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                return <span className="text-cyan-400">{formatted}</span>;
+            },
         },
         {
             key: 'position',
@@ -116,11 +121,12 @@ export function UsersDashboard() {
                                 <button
                                     onClick={() => {
                                         setEditingId(row.id);
+                                        const validRoles = ['super_admin', 'manager', 'team_leader', 'employee'];
                                         setFormData({
                                             full_name: row.full_name,
                                             email: row.email,
                                             password: '', // Leave blank for edit unless changing
-                                            role: row.role,
+                                            role: validRoles.includes(row.role) ? row.role as UserRole : 'employee',
                                             position: row.position || '',
                                             cv_file: null,
                                             id_card_file: null,
@@ -277,8 +283,8 @@ export function UsersDashboard() {
                             <label className="mb-2 block text-sm font-medium text-slate-200">System Role</label>
                             <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
                                 <option value="super_admin">Super Admin</option>
-                                <option value="admin">Admin</option>
                                 <option value="manager">Manager</option>
+                                <option value="team_leader">Team Leader</option>
                                 <option value="employee">Employee</option>
                             </select>
                         </div>

@@ -158,7 +158,7 @@ func CreateReservation(c *gin.Context) {
 	}
 
 	var admins []models.User
-	database.DB.Where("role IN ?", []string{"super_admin", "admin_manager"}).Find(&admins)
+	database.DB.Where("role IN ?", []string{"super_admin", "manager"}).Find(&admins)
 
 	for _, admin := range admins {
 		database.DB.Create(&models.Notification{
@@ -171,7 +171,7 @@ func CreateReservation(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
-// UpdateReservationStatus API (Endpoint for Admin/Manager)
+// UpdateReservationStatus API (Endpoint for Manager/Team Leader)
 func UpdateReservationStatus(c *gin.Context) {
 	id := c.Param("id")
 

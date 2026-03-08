@@ -27,7 +27,7 @@ func SetupRouter() *gin.Engine {
 	api := r.Group("/api")
 	{
 		// Global Search
-		api.GET("/search", middleware.RequireAuth(), handlers.GlobalSearch)
+		api.GET("/search", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GlobalSearch)
 
 		// Auth routes
 		auth := api.Group("/auth")
@@ -40,7 +40,7 @@ func SetupRouter() *gin.Engine {
 
 		// Users group
 		users := api.Group("/users")
-		users.Use(middleware.RequireAuth())
+		users.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			// GET /api/users to return mock users list
 			users.GET("", handlers.GetUsers)
@@ -52,7 +52,7 @@ func SetupRouter() *gin.Engine {
 
 		// Reservations workflow
 		reservations := api.Group("/reservations")
-		reservations.Use(middleware.RequireAuth())
+		reservations.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			// GET /api/reservations to return mock reservations list
 			reservations.GET("", handlers.GetReservations)
@@ -64,7 +64,7 @@ func SetupRouter() *gin.Engine {
 
 		// Operations group
 		operations := api.Group("/operations")
-		operations.Use(middleware.RequireAuth())
+		operations.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			operations.GET("/drones", handlers.GetDrones)
 			operations.POST("/drones", handlers.CreateDrone)
@@ -74,7 +74,7 @@ func SetupRouter() *gin.Engine {
 
 		// Office group
 		office := api.Group("/office")
-		office.Use(middleware.RequireAuth())
+		office.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			office.GET("/assets", handlers.GetOfficeAssets)
 			office.POST("/assets", handlers.CreateOfficeAsset)
@@ -84,7 +84,7 @@ func SetupRouter() *gin.Engine {
 
 		// R&D group
 		rnd := api.Group("/rnd")
-		rnd.Use(middleware.RequireAuth())
+		rnd.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			rnd.GET("/assets", handlers.GetRndAssets)
 			rnd.POST("/assets", handlers.CreateRndAsset)
@@ -93,19 +93,11 @@ func SetupRouter() *gin.Engine {
 		}
 
 		// Dashboard activities
-		api.GET("/dashboard/activities", handlers.GetActivities)
+		api.GET("/dashboard/activities", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetActivities)
 
 		// System Settings
 		settings := api.Group("/settings")
-		settings.Use(middleware.RequireAuth())
-		settings.Use(func(c *gin.Context) {
-			role := c.GetString("userRole")
-			if role != "super_admin" && role != "admin_manager" {
-				c.AbortWithStatusJSON(403, gin.H{"error": "Admin access required"})
-				return
-			}
-			c.Next()
-		})
+		settings.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			settings.GET("", handlers.GetSettings)
 			settings.PUT("", handlers.UpdateSettings)
@@ -113,22 +105,14 @@ func SetupRouter() *gin.Engine {
 
 		// Statistics & Analytics
 		statistics := api.Group("/statistics")
-		statistics.Use(middleware.RequireAuth())
-		statistics.Use(func(c *gin.Context) {
-			role := c.GetString("userRole")
-			if role != "super_admin" && role != "admin_manager" {
-				c.AbortWithStatusJSON(403, gin.H{"error": "Admin access required"})
-				return
-			}
-			c.Next()
-		})
+		statistics.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			statistics.GET("", handlers.GetStatistics)
 		}
 
 		// Notifications group
 		notifications := api.Group("/notifications")
-		notifications.Use(middleware.RequireAuth())
+		notifications.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			notifications.GET("", handlers.GetNotifications)
 			notifications.PATCH("/:id/read", handlers.MarkNotificationRead)

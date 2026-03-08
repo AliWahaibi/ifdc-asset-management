@@ -145,7 +145,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         })}
 
                         {/* Explicit Conditional Rendering for Authorized Roles */}
-                        {['admin', 'super_admin'].includes(user.role) && (
+                        {['manager', 'super_admin'].includes(user.role) && (
                             <>
                                 {[{ label: 'Analytics', path: '/statistics', icon: <PieChart className="h-5 w-5" /> },
                                 { label: 'User Management', path: '/users', icon: <Users className="h-5 w-5" /> },

@@ -85,7 +85,7 @@ export function App() {
                     <Route
                         path="/users"
                         element={
-                            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+                            <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
                                 <UsersDashboard />
                             </ProtectedRoute>
                         }
@@ -95,7 +95,7 @@ export function App() {
                     <Route
                         path="/settings"
                         element={
-                            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+                            <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
                                 <SystemSettings />
                             </ProtectedRoute>
                         }
@@ -105,7 +105,7 @@ export function App() {
                     <Route
                         path="/statistics"
                         element={
-                            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+                            <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
                                 <StatisticsDashboard />
                             </ProtectedRoute>
                         }

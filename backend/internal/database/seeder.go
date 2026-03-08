@@ -47,70 +47,6 @@ func SeedUsers() {
 		log.Printf("Error fetching approved reservations for sync: %v\n", err)
 	}
 
-	var count int64
-	if err := DB.Model(&models.User{}).Count(&count).Error; err != nil {
-		log.Printf("Failed to check users count for seeding: %v\n", err)
-		return
-	}
-
-	if count > 0 {
-		// Users already exist, no need to seed (but check settings first)
-	} else {
-		log.Println("Seeding database with demo users...")
-
-		// Hash a default password: "password123"
-		hasher := sha256.New()
-		hasher.Write([]byte("password123"))
-		hashedPassword := hex.EncodeToString(hasher.Sum(nil))
-
-		demoUsers := []models.User{
-			{
-				ID:           uuid.New().String(),
-				Email:        "admin@ifdc.ae",
-				FullName:     "Khalid Al Maktoum",
-				Role:         "super_admin",
-				PasswordHash: hashedPassword,
-				Status:       "active",
-				IsApproved:   true,
-			},
-			{
-				ID:           uuid.New().String(),
-				Email:        "manager@ifdc.ae",
-				FullName:     "Sara Al Nahyan",
-				Role:         "admin_manager",
-				PasswordHash: hashedPassword,
-				Status:       "active",
-				IsApproved:   true,
-			},
-			{
-				ID:           uuid.New().String(),
-				Email:        "editor@ifdc.ae",
-				FullName:     "Ahmed Hassan",
-				Role:         "editor_team_leader",
-				PasswordHash: hashedPassword,
-				Status:       "active",
-				IsApproved:   true,
-			},
-			{
-				ID:           uuid.New().String(),
-				Email:        "user@ifdc.ae",
-				FullName:     "Fatima Al Zahra",
-				Role:         "user_employee",
-				PasswordHash: hashedPassword,
-				Status:       "active",
-				IsApproved:   true,
-			},
-		}
-
-		for _, user := range demoUsers {
-			if err := DB.Create(&user).Error; err != nil {
-				log.Printf("Failed to seed user %s: %v\n", user.Email, err)
-			}
-		}
-
-		log.Println("Demo users seeded successfully.")
-	}
-
 	// Setup default system settings if non-existent
 	var settingsCount int64
 	if err := DB.Model(&models.SystemSetting{}).Count(&settingsCount).Error; err == nil && settingsCount == 0 {
@@ -127,6 +63,8 @@ func SeedUsers() {
 			log.Println("Default system settings seeded successfully.")
 		}
 	}
+
+	// Hash a default password: "password123"
 	hasher := sha256.New()
 	hasher.Write([]byte("password123"))
 	hashedPassword := hex.EncodeToString(hasher.Sum(nil))
@@ -134,7 +72,7 @@ func SeedUsers() {
 	demoUsers := []models.User{
 		{
 			ID:           uuid.New().String(),
-			Email:        "admin@ifdc.ae",
+			Email:        "superadmin@ifdc.ae",
 			FullName:     "Khalid Al Maktoum",
 			Role:         "super_admin",
 			PasswordHash: hashedPassword,
@@ -145,25 +83,25 @@ func SeedUsers() {
 			ID:           uuid.New().String(),
 			Email:        "manager@ifdc.ae",
 			FullName:     "Sara Al Nahyan",
-			Role:         "admin_manager",
+			Role:         "manager",
 			PasswordHash: hashedPassword,
 			Status:       "active",
 			IsApproved:   true,
 		},
 		{
 			ID:           uuid.New().String(),
-			Email:        "editor@ifdc.ae",
+			Email:        "team_leader@ifdc.ae",
 			FullName:     "Ahmed Hassan",
-			Role:         "editor_team_leader",
+			Role:         "team_leader",
 			PasswordHash: hashedPassword,
 			Status:       "active",
 			IsApproved:   true,
 		},
 		{
 			ID:           uuid.New().String(),
-			Email:        "user@ifdc.ae",
+			Email:        "employee@ifdc.ae",
 			FullName:     "Fatima Al Zahra",
-			Role:         "user_employee",
+			Role:         "employee",
 			PasswordHash: hashedPassword,
 			Status:       "active",
 			IsApproved:   true,
@@ -174,6 +112,7 @@ func SeedUsers() {
 		var existing models.User
 		if err := DB.Where("email = ?", user.Email).First(&existing).Error; err == nil {
 			DB.Model(&existing).Update("password_hash", user.PasswordHash)
+			DB.Model(&existing).Update("role", user.Role)
 		} else {
 			if err := DB.Create(&user).Error; err != nil {
 				log.Printf("Failed to seed user %s: %v\n", user.Email, err)

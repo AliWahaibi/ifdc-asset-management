@@ -1,6 +1,6 @@
 // ===== Enums =====
 
-export type UserRole = 'super_admin' | 'admin' | 'manager' | 'employee';
+export type UserRole = 'super_admin' | 'manager' | 'team_leader' | 'employee';
 
 export type AssetStatus = 'available' | 'in_use' | 'maintenance' | 'retired' | 'reserved';
 

@@ -38,31 +38,6 @@ export function LoginPage() {
         }
     };
 
-    // Demo mode: Logs in using the real backend seeded database users
-    const handleDemoLogin = async (role: 'super_admin' | 'admin' | 'manager' | 'employee') => {
-        const roleEmailMap = {
-            'super_admin': 'superadmin@ifdc.ae',
-            'admin': 'admin@ifdc.ae',
-            'manager': 'manager@ifdc.ae',
-            'employee': 'employee@ifdc.ae'
-        };
-        const demoEmail = roleEmailMap[role];
-        setEmail(demoEmail);
-        setPassword('password123');
-
-        try {
-            await login(demoEmail, 'password123');
-            navigate(from, { replace: true });
-        } catch (err: unknown) {
-            if (err && typeof err === 'object' && 'response' in err) {
-                const axiosErr = err as { response?: { data?: { message?: string } } };
-                setError(axiosErr.response?.data?.message || 'Invalid credentials. Please try again.');
-            } else {
-                setError('Unable to connect to server. Please try again later.');
-            }
-        }
-    };
-
     return (
         <AuroraBackground>
             <div className="relative z-10 w-full max-w-md animate-fade-in">
@@ -140,29 +115,6 @@ export function LoginPage() {
                             )}
                         </button>
                     </form>
-                </div>
-
-                {/* Demo Accounts */}
-                <div className="mt-6 rounded-xl border border-white/20 dark:border-white/10 bg-white/10 dark:bg-black/40 p-4 backdrop-blur-lg">
-                    <p className="mb-3 text-center text-xs font-medium uppercase tracking-wider text-slate-300">
-                        Demo Accounts
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                        {([
-                            { role: 'super_admin' as const, label: 'Super Admin', color: 'hover:border-rose-500/50 hover:text-rose-400' },
-                            { role: 'admin' as const, label: 'Manager', color: 'hover:border-violet-500/50 hover:text-violet-400' },
-                            { role: 'manager' as const, label: 'Team Leader', color: 'hover:border-cyan-500/50 hover:text-cyan-400' },
-                            { role: 'employee' as const, label: 'Employee', color: 'hover:border-emerald-500/50 hover:text-emerald-400' },
-                        ]).map((demo) => (
-                            <button
-                                key={demo.role}
-                                onClick={() => handleDemoLogin(demo.role)}
-                                className={`rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-300 transition-all ${demo.color}`}
-                            >
-                                {demo.label}
-                            </button>
-                        ))}
-                    </div>
                 </div>
             </div>
         </AuroraBackground>

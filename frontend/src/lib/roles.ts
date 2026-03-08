@@ -6,8 +6,8 @@ import type { UserRole } from '@/types';
  */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
     employee: 0,
-    manager: 1,
-    admin: 2,
+    team_leader: 1,
+    manager: 2,
     super_admin: 3,
 };
 
@@ -16,8 +16,8 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
  */
 export const ROLE_LABELS: Record<UserRole, string> = {
     super_admin: 'Super Admin',
-    admin: 'Admin',
     manager: 'Manager',
+    team_leader: 'Team Leader',
     employee: 'Employee',
 };
 

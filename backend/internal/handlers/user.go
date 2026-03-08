@@ -174,9 +174,14 @@ func UploadUserFiles(c *gin.Context) {
 
 	role := c.PostForm("role")
 	if role != "" {
-		user.Role = role
+		validRoles := map[string]bool{"super_admin": true, "manager": true, "team_leader": true, "employee": true}
+		if validRoles[role] {
+			user.Role = role
+		} else {
+			user.Role = "employee" // Default to employee if invalid
+		}
 	} else if !isUpdate {
-		user.Role = "user_employee" // default for creations
+		user.Role = "employee" // default for creations
 	}
 
 	if isUpdate {
