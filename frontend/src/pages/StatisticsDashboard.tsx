@@ -38,6 +38,10 @@ export function StatisticsDashboard() {
         );
     }
 
+    const mostReservedAssets = stats.most_reserved_assets || [];
+    const statusBreakdown = stats.status_breakdown || [];
+    const topUsers = stats.top_users || [];
+
     return (
         <div className="space-y-8 animate-fade-in py-4">
             {/* Header */}
@@ -61,7 +65,7 @@ export function StatisticsDashboard() {
                         </div>
                         <div>
                             <p className="text-sm font-medium text-slate-400">Total Fleet Flight Hours</p>
-                            <p className="text-3xl font-bold text-white">{stats.total_flight_hours} <span className="text-sm font-normal text-slate-500">hrs</span></p>
+                            <p className="text-3xl font-bold text-white">{stats.total_flight_hours || 0} <span className="text-sm font-normal text-slate-500">hrs</span></p>
                         </div>
                     </div>
                 </div>
@@ -75,20 +79,24 @@ export function StatisticsDashboard() {
                     <h3 className="mb-6 text-lg font-semibold text-white flex items-center gap-2">
                         <Monitor className="h-5 w-5 text-violet-400" /> Most Reserved Assets
                     </h3>
-                    <div className="h-80 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.most_reserved_assets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f8fafc' }}
-                                    itemStyle={{ color: '#22d3ee' }}
-                                    cursor={{ fill: '#334155', opacity: 0.4 }}
-                                />
-                                <Bar dataKey="total_reservations" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={40} name="Reservations" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                    <div className="h-80 w-full flex items-center justify-center">
+                        {mostReservedAssets.length === 0 ? (
+                            <p className="text-slate-500">No reservation data available</p>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={mostReservedAssets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f8fafc' }}
+                                        itemStyle={{ color: '#22d3ee' }}
+                                        cursor={{ fill: '#334155', opacity: 0.4 }}
+                                    />
+                                    <Bar dataKey="total_reservations" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={40} name="Reservations" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
 
@@ -98,13 +106,13 @@ export function StatisticsDashboard() {
                         <Activity className="h-5 w-5 text-emerald-400" /> Current Asset Statuses
                     </h3>
                     <div className="h-80 w-full flex items-center justify-center">
-                        {stats.status_breakdown.length === 0 ? (
+                        {statusBreakdown.length === 0 ? (
                             <p className="text-slate-500">No asset data available</p>
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
-                                        data={stats.status_breakdown}
+                                        data={statusBreakdown}
                                         dataKey="count"
                                         nameKey="status"
                                         cx="50%"
@@ -113,7 +121,7 @@ export function StatisticsDashboard() {
                                         outerRadius={100}
                                         paddingAngle={5}
                                     >
-                                        {stats.status_breakdown.map((entry, index) => (
+                                        {statusBreakdown.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.status.toLowerCase()] || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.2)" />
                                         ))}
                                     </Pie>
@@ -133,20 +141,24 @@ export function StatisticsDashboard() {
                     <h3 className="mb-6 text-lg font-semibold text-white flex items-center gap-2">
                         <Users className="h-5 w-5 text-cyan-400" /> Most Active Users
                     </h3>
-                    <div className="h-80 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart layout="vertical" data={stats.top_users} margin={{ top: 10, right: 30, left: 40, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-                                <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-                                <YAxis dataKey="full_name" type="category" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} width={120} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f8fafc' }}
-                                    itemStyle={{ color: '#8b5cf6' }}
-                                    cursor={{ fill: '#334155', opacity: 0.4 }}
-                                />
-                                <Bar dataKey="total_reservations" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={24} name="Total Reservations" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                    <div className="h-80 w-full flex items-center justify-center">
+                        {topUsers.length === 0 ? (
+                            <p className="text-slate-500">No user activity data available</p>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart layout="vertical" data={topUsers} margin={{ top: 10, right: 30, left: 40, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                                    <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <YAxis dataKey="full_name" type="category" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} width={120} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f8fafc' }}
+                                        itemStyle={{ color: '#8b5cf6' }}
+                                        cursor={{ fill: '#334155', opacity: 0.4 }}
+                                    />
+                                    <Bar dataKey="total_reservations" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={24} name="Total Reservations" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
 
