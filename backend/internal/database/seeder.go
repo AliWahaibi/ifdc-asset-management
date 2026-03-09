@@ -7,9 +7,6 @@ import (
 
 	"crypto/sha256"
 	"encoding/hex"
-
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func SeedUsers() {
@@ -72,88 +69,87 @@ func SeedUsers() {
 	}
 
 	// If users table was empty, seed default admin user and skip demo users
-	if userCount == 0 {
-		log.Println("No users found. Seeding default admin user...")
+	// if userCount == 0 {
+	// 	log.Println("No users found. Seeding default admin user...")
 
-		// Generate bcrypt hash for "admin123"
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
-		if err != nil {
-			log.Fatalf("Failed to hash password: %v", err)
-		}
+	// 	// Generate bcrypt hash for "admin123"
+	// 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	// 	if err != nil {
+	// 		log.Fatalf("Failed to hash password: %v", err)
+	// 	}
 
-		admin := models.User{
-			ID:           uuid.New().String(),
-			Email:        "admin@ifdc.com",
-			FullName:     "System Administrator",
-			Role:         "super_admin",
-			PasswordHash: string(hashedPassword),
-			Status:       "active",
-			IsApproved:   true,
-		}
+	// 	admin := models.User{
+	// 		ID:           uuid.New().String(),
+	// 		Email:        "admin@ifdc.com",
+	// 		FullName:     "System Administrator",
+	// 		Role:         "super_admin",
+	// 		PasswordHash: string(hashedPassword),
+	// 		Status:       "active",
+	// 		IsApproved:   true,
+	// 	}
 
-		if err := DB.Create(&admin).Error; err != nil {
-			log.Fatalf("Failed to seed admin user: %v", err)
-		}
+	// 	if err := DB.Create(&admin).Error; err != nil {
+	// 		log.Fatalf("Failed to seed admin user: %v", err)
+	// 	}
 
-		log.Println("Default admin user seeded successfully.")
-		return
-	}
+	// 	log.Println("Default admin user seeded successfully.")
+	// 	return
+	// }
 
 	// Hash a default password: "password123"
-	hasher := sha256.New()
-	hasher.Write([]byte("password123"))
-	hashedPassword := hex.EncodeToString(hasher.Sum(nil))
+	// hasher := sha256.New()
+	// hasher.Write([]byte("password123"))
+	// hashedPassword := hex.EncodeToString(hasher.Sum(nil))
 
-	demoUsers := []models.User{
-		{
-			ID:           uuid.New().String(),
-			Email:        "superadmin@ifdc.ae",
-			FullName:     "Khalid Al Maktoum",
-			Role:         "super_admin",
-			PasswordHash: hashedPassword,
-			Status:       "active",
-			IsApproved:   true,
-		},
-		{
-			ID:           uuid.New().String(),
-			Email:        "manager@ifdc.ae",
-			FullName:     "Sara Al Nahyan",
-			Role:         "manager",
-			PasswordHash: hashedPassword,
-			Status:       "active",
-			IsApproved:   true,
-		},
-		{
-			ID:           uuid.New().String(),
-			Email:        "team_leader@ifdc.ae",
-			FullName:     "Ahmed Hassan",
-			Role:         "team_leader",
-			PasswordHash: hashedPassword,
-			Status:       "active",
-			IsApproved:   true,
-		},
-		{
-			ID:           uuid.New().String(),
-			Email:        "employee@ifdc.ae",
-			FullName:     "Fatima Al Zahra",
-			Role:         "employee",
-			PasswordHash: hashedPassword,
-			Status:       "active",
-			IsApproved:   true,
-		},
-	}
+	// demoUsers := []models.User{
+	// 	{
+	// 		ID:           uuid.New().String(),
+	// 		Email:        "superadmin@ifdc.ae",
+	// 		FullName:     "Khalid Al Maktoum",
+	// 		Role:         "super_admin",
+	// 		PasswordHash: hashedPassword,
+	// 		Status:       "active",
+	// 		IsApproved:   true,
+	// 	},
+	// 	{
+	// 		ID:           uuid.New().String(),
+	// 		Email:        "manager@ifdc.ae",
+	// 		FullName:     "Sara Al Nahyan",
+	// 		Role:         "manager",
+	// 		PasswordHash: hashedPassword,
+	// 		Status:       "active",
+	// 		IsApproved:   true,
+	// 	},
+	// 	{
+	// 		ID:           uuid.New().String(),
+	// 		Email:        "team_leader@ifdc.ae",
+	// 		FullName:     "Ahmed Hassan",
+	// 		Role:         "team_leader",
+	// 		PasswordHash: hashedPassword,
+	// 		Status:       "active",
+	// 		IsApproved:   true,
+	// 	},
+	// 	{
+	// 		ID:           uuid.New().String(),
+	// 		Email:        "employee@ifdc.ae",
+	// 		FullName:     "Fatima Al Zahra",
+	// 		Role:         "employee",
+	// 		PasswordHash: hashedPassword,
+	// 		Status:       "active",
+	// 		IsApproved:   true,
+	// 	},
+	// }
 
-	for _, user := range demoUsers {
-		var existing models.User
-		if err := DB.Where("email = ?", user.Email).First(&existing).Error; err == nil {
-			DB.Model(&existing).Update("password_hash", user.PasswordHash)
-			DB.Model(&existing).Update("role", user.Role)
-		} else {
-			if err := DB.Create(&user).Error; err != nil {
-				log.Printf("Failed to seed user %s: %v\n", user.Email, err)
-			}
-		}
-	}
+	// for _, user := range demoUsers {
+	// 	var existing models.User
+	// 	if err := DB.Where("email = ?", user.Email).First(&existing).Error; err == nil {
+	// 		DB.Model(&existing).Update("password_hash", user.PasswordHash)
+	// 		DB.Model(&existing).Update("role", user.Role)
+	// 	} else {
+	// 		if err := DB.Create(&user).Error; err != nil {
+	// 			log.Printf("Failed to seed user %s: %v\n", user.Email, err)
+	// 	}
+	// }
 
-	log.Println("Demo users seeded successfully.")
+	// log.Println("Demo users seeded successfully.")
 }
