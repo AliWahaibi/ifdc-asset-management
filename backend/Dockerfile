@@ -17,8 +17,7 @@ RUN go mod verify
 COPY . .
 
 # Build the binary with security flags (CGO_ENABLED=0 for static binary)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o backend-binary main.go
-
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -p 1 -ldflags="-w -s" -o backend-binary main.go
 # Stage 2: Minimal runtime
 FROM alpine:latest
 
