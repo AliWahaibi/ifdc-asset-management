@@ -34,6 +34,7 @@ func main() {
 		&models.RndAsset{},
 		&models.Reservation{},
 		&models.Notification{},
+		&models.SystemSetting{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)
