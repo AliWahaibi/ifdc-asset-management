@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"ifdc-backend/internal/database"
 	"ifdc-backend/internal/models"
@@ -43,6 +44,19 @@ func GetDrones(c *gin.Context) {
 		return
 	}
 
+	// Check for active reservations
+	now := time.Now()
+	for i := range drones {
+		var count int64
+		database.DB.Model(&models.Reservation{}).
+			Where("asset_id = ? AND asset_type = 'drone' AND status = 'approved' AND start_date <= ? AND end_date >= ?", drones[i].ID, now, now).
+			Count(&count)
+
+		if count > 0 {
+			drones[i].Status = "in_use"
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": drones, "total": total, "page": page, "limit": limit})
 }
 
@@ -78,6 +92,19 @@ func GetOfficeAssets(c *gin.Context) {
 		return
 	}
 
+	// Check for active reservations
+	now := time.Now()
+	for i := range assets {
+		var count int64
+		database.DB.Model(&models.Reservation{}).
+			Where("asset_id = ? AND asset_type = 'office' AND status = 'approved' AND start_date <= ? AND end_date >= ?", assets[i].ID, now, now).
+			Count(&count)
+
+		if count > 0 {
+			assets[i].Status = "in_use"
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": assets, "total": total, "page": page, "limit": limit})
 }
 
@@ -111,6 +138,19 @@ func GetRndAssets(c *gin.Context) {
 	if err := query.Offset(offset).Limit(limit).Find(&assets).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch R&D assets"})
 		return
+	}
+
+	// Check for active reservations
+	now := time.Now()
+	for i := range assets {
+		var count int64
+		database.DB.Model(&models.Reservation{}).
+			Where("asset_id = ? AND asset_type = 'rnd' AND status = 'approved' AND start_date <= ? AND end_date >= ?", assets[i].ID, now, now).
+			Count(&count)
+
+		if count > 0 {
+			assets[i].Status = "in_use"
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": assets, "total": total, "page": page, "limit": limit})

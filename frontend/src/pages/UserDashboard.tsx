@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import {
     Plane,
     Monitor,
@@ -8,15 +9,18 @@ import {
     AlertTriangle,
     CheckCircle2,
     LayoutDashboard,
+    FileCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { hasMinimumRole } from '@/lib/roles';
+import { useNavigate } from 'react-router-dom';
 
 import { operationService } from '@/services/operationService';
 import { officeService } from '@/services/officeService';
 import { rndService } from '@/services/rndService';
 import { reservationService } from '@/services/reservationService';
 import { dashboardService, type Activity } from '@/services/dashboardService';
+import { admissionService } from '@/services/admissionService';
 
 interface DashboardMetrics {
     totalDrones: number;
@@ -24,13 +28,25 @@ interface DashboardMetrics {
     totalRnd: number;
     totalReservations: number;
     pendingReservations: number;
+    pendingAdmissions: number;
 }
 
 
 
+interface StatCard {
+    label: string;
+    value: string;
+    change: string;
+    icon: ReactNode;
+    gradient: string;
+    glowColor: string;
+    onClick?: () => void;
+}
+
 export function UserDashboard() {
     const { user } = useAuthStore();
-    const isManager = user ? hasMinimumRole(user.role, 'admin') : false;
+    const navigate = useNavigate();
+    const isManager = user ? hasMinimumRole(user.role, 'super_admin') : false;
 
     const [metrics, setMetrics] = useState<DashboardMetrics>({
         totalDrones: 0,
@@ -38,6 +54,7 @@ export function UserDashboard() {
         totalRnd: 0,
         totalReservations: 0,
         pendingReservations: 0,
+        pendingAdmissions: 0,
     });
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(true);
@@ -46,13 +63,14 @@ export function UserDashboard() {
         const fetchMetrics = async () => {
             try {
                 // Fetch totals (limit=1 just to get the 'total' field quickly from backend)
-                const [dronesRes, officeRes, rndRes, reservationsRes, pendingRes, activitiesRes] = await Promise.all([
+                const [dronesRes, officeRes, rndRes, reservationsRes, pendingRes, activitiesRes, admissionsRes] = await Promise.all([
                     operationService.getDrones(1, 1),
                     officeService.getAssets(1, 1),
                     rndService.getAssets(1, 1),
                     reservationService.getReservations(1, 1),
                     reservationService.getReservations(1, 1, 'pending'),
-                    dashboardService.getActivities()
+                    dashboardService.getActivities(),
+                    admissionService.getAdmissions()
                 ]);
 
                 setMetrics({
@@ -61,6 +79,7 @@ export function UserDashboard() {
                     totalRnd: rndRes.total || 0,
                     totalReservations: reservationsRes.total || 0,
                     pendingReservations: pendingRes.total || 0,
+                    pendingAdmissions: admissionsRes.filter((a: any) => a.status === 'pending_approval').length,
                 });
                 setActivities(activitiesRes || []);
             } catch (error) {
@@ -73,7 +92,7 @@ export function UserDashboard() {
         fetchMetrics();
     }, []);
 
-    const STATS = [
+    const STATS: StatCard[] = [
         {
             label: 'Total Drones',
             value: loading ? '-' : metrics.totalDrones.toString(),
@@ -108,6 +127,18 @@ export function UserDashboard() {
         },
     ];
 
+    if (isManager) {
+        STATS.push({
+            label: 'Pending Admissions',
+            value: loading ? '-' : metrics.pendingAdmissions.toString(),
+            change: 'Needs Review',
+            icon: <FileCheck className="h-6 w-6" />,
+            gradient: 'from-pink-500 to-rose-600',
+            glowColor: 'shadow-pink-500/20',
+            onClick: () => navigate('/admissions-list'),
+        });
+    }
+
     return (
         <div className="space-y-8 animate-fade-in">
             {/* Welcome */}
@@ -121,11 +152,12 @@ export function UserDashboard() {
             </div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            <div className={`grid grid-cols-1 gap-6 sm:grid-cols-2 ${isManager ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
                 {STATS.map((stat) => (
                     <div
                         key={stat.label}
-                        className={`glass-card group p-6 ${stat.glowColor}`}
+                        className={`glass-card group p-6 ${stat.glowColor} ${stat.onClick ? 'cursor-pointer transition-transform hover:scale-[1.02]' : ''}`}
+                        onClick={stat.onClick}
                     >
                         <div className="flex items-start justify-between">
                             <div className="space-y-1">
@@ -145,6 +177,7 @@ export function UserDashboard() {
                     </div>
                 ))}
             </div>
+
 
             {/* Activity + System Status */}
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">

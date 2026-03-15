@@ -54,6 +54,8 @@ func GetReservations(c *gin.Context) {
 			database.DB.Model(&models.OfficeAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&name)
 		case "rnd":
 			database.DB.Model(&models.RndAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&name)
+		case "vehicle":
+			database.DB.Model(&models.VehicleAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&name)
 		}
 		reservations[i].AssetName = name
 	}
@@ -168,6 +170,10 @@ func CreateReservation(c *gin.Context) {
 		})
 	}
 
+	// Log the asset request
+	logDetails := fmt.Sprintf("User %s (%s) requested asset %s (%s)", requestor.FullName, requestor.Email, assetName, res.AssetID)
+	database.CreateLog("INFO", "Asset Requested", logDetails, &userID)
+
 	c.JSON(http.StatusCreated, res)
 }
 
@@ -181,6 +187,13 @@ func UpdateReservationStatus(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Extract admin user_id securely from Gin Context
+	adminID := c.GetString("userID")
+	if adminID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: missing user ID"})
 		return
 	}
 
@@ -231,6 +244,19 @@ func UpdateReservationStatus(c *gin.Context) {
 			Title:   "Request Update",
 			Message: fmt.Sprintf("Your request for %s has been %s.", assetName, statusText),
 		})
+
+		// Log the reservation update
+		var admin models.User
+		if err := database.DB.First(&admin, "id = ?", adminID).Error; err == nil {
+			logLevel := "INFO"
+			if req.Status == "rejected" {
+				logLevel = "WARNING"
+			}
+			logAction := fmt.Sprintf("Reservation %s", statusText)
+			logDetails := fmt.Sprintf("Admin %s (%s) %s the reservation for asset %s (%s)", admin.FullName, admin.Email, req.Status, assetName, res.AssetID)
+
+			database.CreateLog(logLevel, logAction, logDetails, &adminID)
+		}
 	}
 
 	c.JSON(http.StatusOK, res)

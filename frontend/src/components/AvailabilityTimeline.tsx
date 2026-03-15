@@ -4,6 +4,7 @@ import { userService } from '@/services/userService';
 import { operationService } from '@/services/operationService';
 import { officeService } from '@/services/officeService';
 import { rndService } from '@/services/rndService';
+import { vehicleService } from '@/services/vehicleService';
 import type { Reservation } from '@/types';
 import { Calendar } from 'lucide-react';
 
@@ -16,12 +17,13 @@ export function AvailabilityTimeline() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [resRes, usersRes, dronesRes, officeRes, rndRes] = await Promise.all([
+                const [resRes, usersRes, dronesRes, officeRes, rndRes, vehiclesRes] = await Promise.all([
                     reservationService.getReservations(1, 100, 'approved'),
                     userService.getUsers(),
                     operationService.getDrones(1, 100),
                     officeService.getAssets(1, 100),
-                    rndService.getAssets(1, 100)
+                    rndService.getAssets(1, 100),
+                    vehicleService.getAssets(1, 100)
                 ]);
 
                 setReservations(resRes.data || []);
@@ -34,6 +36,7 @@ export function AvailabilityTimeline() {
                 dronesRes.data?.forEach(d => aMap[d.id] = d.name);
                 officeRes.data?.forEach(o => aMap[o.id] = o.name);
                 rndRes.data?.forEach(r => aMap[r.id] = r.name);
+                vehiclesRes.data?.forEach(v => aMap[v.id] = v.name);
                 setAssetMap(aMap);
 
             } catch (error) {

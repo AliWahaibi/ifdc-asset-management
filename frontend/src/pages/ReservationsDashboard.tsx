@@ -13,9 +13,11 @@ export function ReservationsDashboard() {
     const { user } = useAuthStore();
     const canApprove = user ? hasAnyRole(user.role, ['super_admin', 'manager', 'team_leader']) : false;
 
-    const [activeTab, setActiveTab] = useState<'pending' | 'all'>(canApprove ? 'pending' : 'all');
+    const [activeTab, setActiveTab] = useState<string>('all');
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const TABS = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
 
 
 
@@ -175,30 +177,38 @@ export function ReservationsDashboard() {
             {/* Table */}
             <div className="glass-panel mt-6 flex overflow-hidden">
                 <div className="flex w-full flex-col">
-                    {/* Tabs for Admins */}
-                    {canApprove && (
-                        <div className="border-b border-slate-700/50 bg-slate-900/50 px-4 py-3">
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setActiveTab('pending')}
-                                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'pending' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:bg-slate-800'}`}
-                                >
-                                    Pending Approval
-                                    {reservations.filter(r => r.status === 'pending').length > 0 && (
-                                        <span className="ml-2 rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] text-white">
-                                            {reservations.filter(r => r.status === 'pending').length}
-                                        </span>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('all')}
-                                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'all' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:bg-slate-800'}`}
-                                >
-                                    All Reservations
-                                </button>
-                            </div>
+                    {/* Tabs */}
+                    <div className="border-b border-slate-700/50 bg-slate-900/50 px-4 py-3">
+                        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
+                            {TABS.map((tab) => {
+                                const isActive = activeTab.toLowerCase() === tab.toLowerCase();
+                                const count = tab === 'All' 
+                                    ? reservations.length 
+                                    : reservations.filter(r => r.status.toLowerCase() === tab.toLowerCase()).length;
+                                
+                                return (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab.toLowerCase())}
+                                        className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                                            isActive 
+                                                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/20' 
+                                                : 'text-slate-400 hover:bg-slate-800 border border-transparent'
+                                        }`}
+                                    >
+                                        {tab}
+                                        {count > 0 && (
+                                            <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${
+                                                isActive ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300'
+                                            }`}>
+                                                {count}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
-                    )}
+                    </div>
 
                     <div className="p-4">
                         {loading ? (
@@ -208,7 +218,10 @@ export function ReservationsDashboard() {
                         ) : (
                             <DataTable
                                 columns={columns}
-                                data={activeTab === 'pending' ? reservations.filter(r => r.status === 'pending') : reservations}
+                                data={activeTab === 'all' 
+                                    ? reservations 
+                                    : reservations.filter(r => r.status.toLowerCase() === activeTab)
+                                }
                                 keyExtractor={(row) => row.id}
                                 searchPlaceholder="Search by ID or type..."
                             />

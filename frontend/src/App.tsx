@@ -12,8 +12,12 @@ import { ReservationsDashboard } from '@/pages/ReservationsDashboard';
 import { TimelineCalendar } from '@/pages/TimelineCalendar';
 import { UserProfile } from '@/pages/UserProfile';
 import { SystemSettings } from '@/pages/SystemSettings';
+import { SystemLogs } from '@/pages/SystemLogs';
 import { StatisticsDashboard } from '@/pages/StatisticsDashboard';
 import { AIAssistant } from '@/pages/AIAssistant';
+import { ProjectAdmission } from '@/pages/ProjectAdmission';
+import { ProjectAdmissionsList } from '@/pages/ProjectAdmissionsList';
+import { VehiclesManagement } from '@/pages/VehiclesManagement';
 import { Toaster } from 'react-hot-toast';
 
 export function App() {
@@ -40,6 +44,8 @@ export function App() {
                     <Route path="/calendar" element={<TimelineCalendar />} />
                     <Route path="/ai-assistant" element={<AIAssistant />} />
                     <Route path="/profile" element={<UserProfile />} />
+                    <Route path="/admission" element={<ProjectAdmission />} />
+                    <Route path="/admissions-list" element={<ProjectAdmissionsList />} />
 
                     {/* Operations — Super Admin, Manager, Team Leader */}
                     <Route
@@ -57,6 +63,16 @@ export function App() {
                         element={
                             <ProtectedRoute>
                                 <OfficeDashboard />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    {/* Vehicles — Super Admin, Manager, Team Leader */}
+                    <Route
+                        path="/vehicles"
+                        element={
+                            <ProtectedRoute>
+                                <VehiclesManagement />
                             </ProtectedRoute>
                         }
                     />
@@ -97,6 +113,26 @@ export function App() {
                         element={
                             <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
                                 <SystemSettings />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    {/* System Logs — Super Admin, Admin */}
+                    <Route
+                        path="/logs"
+                        element={
+                            <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                                <SystemLogs />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    {/* Statistics — Super Admin, Admin */}
+                    <Route
+                        path="/logs"
+                        element={
+                            <ProtectedRoute allowedRoles={['manager', 'super_admin']}>
+                                <SystemLogs />
                             </ProtectedRoute>
                         }
                     />

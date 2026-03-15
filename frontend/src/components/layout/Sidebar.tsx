@@ -17,6 +17,8 @@ import {
     ChevronLeft,
     ChevronRight,
     Bot,
+    Briefcase,
+    Car,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -37,24 +39,31 @@ const NAV_ITEMS: NavItem[] = [
         label: 'Operations',
         path: '/operations',
         icon: <Plane className="h-5 w-5" />,
-
     },
     {
         label: 'Office Assets',
         path: '/office',
         icon: <Monitor className="h-5 w-5" />,
-
+    },
+    {
+        label: 'Vehicles',
+        path: '/vehicles',
+        icon: <Car className="h-5 w-5" />,
     },
     {
         label: 'R&D Lab',
         path: '/rnd',
         icon: <FlaskConical className="h-5 w-5" />,
-
     },
     {
         label: 'Reservations',
         path: '/reservations',
         icon: <CalendarCheck className="h-5 w-5" />,
+    },
+    {
+        label: 'Project Admission',
+        path: '/admission',
+        icon: <Briefcase className="h-5 w-5" />,
     },
     {
         label: 'Calendar',
@@ -65,6 +74,30 @@ const NAV_ITEMS: NavItem[] = [
         label: 'AI Assistant',
         path: '/ai-assistant',
         icon: <Bot className="h-5 w-5" />,
+    },
+    {
+        label: 'Analytics',
+        path: '/statistics',
+        icon: <PieChart className="h-5 w-5" />,
+        roles: ['super_admin', 'manager'],
+    },
+    {
+        label: 'User Management',
+        path: '/users',
+        icon: <Users className="h-5 w-5" />,
+        roles: ['super_admin', 'manager'],
+    },
+    {
+        label: 'System Logs',
+        path: '/logs',
+        icon: <Shield className="h-5 w-5" />,
+        roles: ['super_admin', 'manager'],
+    },
+    {
+        label: 'Settings',
+        path: '/settings',
+        icon: <Settings className="h-5 w-5" />,
+        roles: ['super_admin', 'manager'],
     },
 ];
 
@@ -80,6 +113,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
     if (!user) return null;
 
+    // Filter items based on user role
     const visibleItems = NAV_ITEMS.filter(
         (item) => !item.roles || hasAnyRole(user.role, item.roles)
     );
@@ -143,38 +177,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                                 </li>
                             );
                         })}
-
-                        {/* Explicit Conditional Rendering for Authorized Roles */}
-                        {['manager', 'super_admin'].includes(user.role) && (
-                            <>
-                                {[{ label: 'Analytics', path: '/statistics', icon: <PieChart className="h-5 w-5" /> },
-                                { label: 'User Management', path: '/users', icon: <Users className="h-5 w-5" /> },
-                                { label: 'System Settings', path: '/settings', icon: <Settings className="h-5 w-5" /> }
-                                ].map((item) => {
-                                    const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-                                    return (
-                                        <li key={item.path}>
-                                            <NavLink
-                                                to={item.path}
-                                                title={collapsed ? item.label : undefined}
-                                                className={`group relative flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-medium transition-all duration-200 ${isActive
-                                                    ? 'bg-cyan-500/12 text-cyan-300 shadow-sm'
-                                                    : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
-                                                    }`}
-                                            >
-                                                {isActive && (
-                                                    <span className="absolute -left-3 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-cyan-400 shadow-md shadow-cyan-400/40" />
-                                                )}
-                                                <span className={`shrink-0 transition-colors ${isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-300'}`}>
-                                                    {item.icon}
-                                                </span>
-                                                {!collapsed && <span className="truncate">{item.label}</span>}
-                                            </NavLink>
-                                        </li>
-                                    );
-                                })}
-                            </>
-                        )}
                     </ul>
                 </nav>
 

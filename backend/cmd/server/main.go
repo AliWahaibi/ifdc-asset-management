@@ -32,6 +32,14 @@ func SetupRouter() *gin.Engine {
 		// Global Search
 		api.GET("/search", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GlobalSearch)
 
+		// Availability Check
+		api.GET("/assets/availability", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.CheckAssetAvailability)
+
+		// Admissions
+		api.POST("/admissions", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.CreateAdmission)
+		api.GET("/admissions", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetAdmissions)
+		api.PATCH("/admissions/:id/status", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.UpdateAdmissionStatus)
+
 		// Auth routes
 		auth := api.Group("/auth")
 		// Stricter rate limit for login to prevent brute force (30 req per min)
@@ -95,8 +103,21 @@ func SetupRouter() *gin.Engine {
 			rnd.DELETE("/assets/:id", handlers.DeleteRndAsset)
 		}
 
+		// Vehicles group
+		vehicles := api.Group("/vehicles")
+		vehicles.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
+		{
+			vehicles.GET("/assets", handlers.GetVehicleAssets)
+			vehicles.POST("/assets", handlers.CreateVehicleAsset)
+			vehicles.PUT("/assets/:id", handlers.UpdateVehicleAsset)
+			vehicles.DELETE("/assets/:id", handlers.DeleteVehicleAsset)
+		}
+
 		// Dashboard activities
 		api.GET("/dashboard/activities", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetActivities)
+
+		// System Logs
+		api.GET("/logs", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetLogs)
 
 		// System Settings
 		settings := api.Group("/settings")

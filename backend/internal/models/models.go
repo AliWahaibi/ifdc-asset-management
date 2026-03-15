@@ -82,7 +82,36 @@ type Reservation struct {
 	EndDate   time.Time      `gorm:"not null" json:"end_date"`
 	Status    string         `gorm:"not null;default:'pending'" json:"status"` // pending, approved, rejected, completed, cancelled
 	Notes     string         `json:"notes"`
+	ProjectID *string        `gorm:"type:uuid" json:"project_id"`
+	Project   *Project       `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+type Project struct {
+	ID           string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	Name         string         `gorm:"not null" json:"name"`
+	StartDate    time.Time      `json:"start_date"`
+	EndDate      time.Time      `json:"end_date"`
+	Status       string         `gorm:"not null;default:'active'" json:"status"` // active, completed, cancelled
+	UserID       string         `gorm:"type:uuid;not null" json:"user_id"`
+	User         User           `gorm:"foreignKey:UserID" json:"user"`
+	Reservations []Reservation  `gorm:"foreignKey:ProjectID" json:"requested_assets"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+type VehicleAsset struct {
+	ID           string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	Name         string         `gorm:"not null" json:"name"` // e.g. "Toyota Land Cruiser"
+	LicensePlate string         `gorm:"uniqueIndex;not null" json:"license_plate"`
+	Status       string         `gorm:"not null;default:'available'" json:"status"` // available, in_use, maintenance, reserved
+	DepartmentID *string        `gorm:"type:uuid" json:"department_id"`
+	Mileage      float64        `gorm:"default:0" json:"mileage"`
+	Notes        string         `json:"notes"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }

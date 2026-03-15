@@ -7,6 +7,8 @@ import (
 
 	"crypto/sha256"
 	"encoding/hex"
+	// "github.com/google/uuid"
+	// "golang.org/x/crypto/bcrypt"
 )
 
 func SeedUsers() {

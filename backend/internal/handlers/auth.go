@@ -56,6 +56,9 @@ func Login(c *gin.Context) {
 		"refresh_token": "refresh-token-" + user.Role,
 		"user":          user,
 	})
+
+	// Log successful login
+	database.CreateLog("INFO", "User Login", "User logged in successfully via email", &user.ID)
 }
 
 type RefreshRequest struct {

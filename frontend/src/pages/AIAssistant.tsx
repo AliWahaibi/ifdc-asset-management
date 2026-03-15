@@ -35,10 +35,11 @@ export function AIAssistant() {
         scrollToBottom();
     }, [messages, isLoading]);
 
-    const handleSend = async (e?: React.FormEvent) => {
+    const handleSend = async (e?: React.FormEvent, textOverride?: string) => {
         if (e) e.preventDefault();
 
-        const trimmed = input.trim();
+        const messageText = textOverride || input;
+        const trimmed = messageText.trim();
         if (!trimmed || isLoading) return;
 
         const userMsg: Message = { id: Date.now().toString(), role: 'user', content: trimmed };
@@ -59,6 +60,13 @@ export function AIAssistant() {
             setIsLoading(false);
         }
     };
+
+    const quickActions = [
+        "Check available drones today",
+        "Who has the DJI Mavic?",
+        "Summarize active projects",
+        "Show available vehicles"
+    ];
 
     return (
         <div className="relative w-full h-full min-h-[calc(100vh-4.5rem)] overflow-hidden bg-black/[0.96] border-t border-white/10 shadow-inner">
@@ -148,6 +156,20 @@ export function AIAssistant() {
                         )}
                     </AnimatePresence>
                     <div ref={messagesEndRef} />
+                </div>
+
+                {/* Quick Actions */}
+                <div className="px-1 pb-3 flex flex-wrap gap-2 shrink-0">
+                    {quickActions.map((action, i) => (
+                        <button
+                            key={i}
+                            onClick={() => handleSend(undefined, action)}
+                            disabled={isLoading}
+                            className="px-3 py-1.5 rounded-full border border-cyan-500/20 bg-cyan-500/5 text-xs font-medium text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                            {action}
+                        </button>
+                    ))}
                 </div>
 
                 {/* Input Area */}

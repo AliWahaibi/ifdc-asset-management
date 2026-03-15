@@ -46,18 +46,27 @@ def get_database_snapshot() -> str:
     snapshot = {}
     try:
         with engine.connect() as conn:
-            # Get count of available assets
-            drone_count = conn.execute(text("SELECT COUNT(*) FROM drone_assets WHERE status = 'available' AND deleted_at IS NULL")).scalar()
-            office_count = conn.execute(text("SELECT COUNT(*) FROM office_assets WHERE status = 'available' AND deleted_at IS NULL")).scalar()
-            rnd_count = conn.execute(text("SELECT COUNT(*) FROM rnd_assets WHERE status = 'available' AND deleted_at IS NULL")).scalar()
+            # 1. Fetch all asset names and IDs first for fast lookup
+            asset_map = {} # { "uuid": "Asset Name" }
             
-            snapshot["total_available_drones"] = drone_count
-            snapshot["total_available_office"] = office_count
-            snapshot["total_available_rnd"] = rnd_count
+            def fetch_assets(table, type_key):
+                # Get names
+                rows = conn.execute(text(f"SELECT id, name FROM {table}")).fetchall()
+                for r in rows:
+                    asset_map[str(r[0])] = r[1]
+                
+                # Get available count
+                count = conn.execute(text(f"SELECT COUNT(*) FROM {table} WHERE status = 'available' AND deleted_at IS NULL")).scalar()
+                snapshot[f"total_available_{type_key}"] = count
 
-            # Get approved reservations and their assignees (JOIN users table on user_id)
+            fetch_assets("drone_assets", "drones")
+            fetch_assets("office_assets", "office")
+            fetch_assets("rnd_assets", "rnd")
+            fetch_assets("vehicle_assets", "vehicles")
+
+            # 2. Get approved reservations
             reservations_query = text("""
-                SELECT r.asset_type, r.asset_id, u.full_name
+                SELECT r.asset_type, r.asset_id, r.start_date, r.end_date, u.full_name
                 FROM reservations r
                 JOIN users u ON r.user_id = u.id
                 WHERE r.status = 'approved' AND r.deleted_at IS NULL
@@ -66,21 +75,15 @@ def get_database_snapshot() -> str:
             
             active_res = []
             for row in result:
-                asset_name = f"Unknown {row['asset_type']}"
-                if row['asset_type'] == 'drone':
-                    name = conn.execute(text("SELECT name FROM drone_assets WHERE id = :id"), {"id": row['asset_id']}).scalar()
-                    if name: asset_name = name
-                elif row['asset_type'] == 'office':
-                    name = conn.execute(text("SELECT name FROM office_assets WHERE id = :id"), {"id": row['asset_id']}).scalar()
-                    if name: asset_name = name
-                elif row['asset_type'] == 'rnd':
-                    name = conn.execute(text("SELECT name FROM rnd_assets WHERE id = :id"), {"id": row['asset_id']}).scalar()
-                    if name: asset_name = name
+                asset_id = str(row['asset_id'])
+                asset_name = asset_map.get(asset_id, f"Unknown {row['asset_type']}")
                     
                 active_res.append({
                     "asset_type": row['asset_type'],
                     "asset_name": asset_name,
-                    "user_name": row['full_name']
+                    "reserved_by": row['full_name'],
+                    "start": str(row['start_date']),
+                    "end": str(row['end_date'])
                 })
                 
             snapshot["active_reservations"] = active_res
