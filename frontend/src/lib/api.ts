@@ -3,6 +3,7 @@ import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 
 // Create a base Axios instance without interceptors (used for refresh calls)
+// Explicitly set /api base URL to ensure requests are routed correctly through Nginx
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const apiClient = axios.create({
