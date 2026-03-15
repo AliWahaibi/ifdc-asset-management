@@ -60,7 +60,7 @@ export function LoginPage() {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                         <div>
                             <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-300">
                                 Email Address
@@ -103,6 +103,7 @@ export function LoginPage() {
                         <button
                             type="submit"
                             disabled={isLoading}
+                            onClick={handleSubmit}
                             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:from-cyan-500 hover:to-cyan-400 hover:shadow-cyan-500/35 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
