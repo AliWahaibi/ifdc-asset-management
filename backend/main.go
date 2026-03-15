@@ -44,6 +44,7 @@ func main() {
 	}
 
 	// Seed the database
+	database.SeedAdminUser()
 	// database.SeedUsers()
 
 	server.Start()

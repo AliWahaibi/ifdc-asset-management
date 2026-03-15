@@ -7,9 +7,41 @@ import (
 
 	"crypto/sha256"
 	"encoding/hex"
-	// "github.com/google/uuid"
-	// "golang.org/x/crypto/bcrypt"
+
+	"golang.org/x/crypto/bcrypt"
 )
+
+func SeedAdminUser() {
+	var count int64
+	if err := DB.Model(&models.User{}).Count(&count).Error; err != nil {
+		log.Printf("Failed to count users: %v", err)
+		return
+	}
+
+	if count == 0 {
+		log.Println("No users found. Seeding default admin user...")
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("Admin@123"), bcrypt.DefaultCost)
+		if err != nil {
+			log.Fatalf("Failed to hash password: %v", err)
+		}
+
+		admin := models.User{
+			Email:        "ali123@gmail.com",
+			PasswordHash: string(hashedPassword),
+			FullName:     "Super Admin",
+			Role:         "super_admin",
+			Status:       "active",
+			IsApproved:   true,
+		}
+
+		if err := DB.Create(&admin).Error; err != nil {
+			log.Fatalf("Failed to seed admin user: %v", err)
+		}
+
+		log.Println("Default admin seeded successfully.")
+	}
+}
 
 func SeedUsers() {
 	// Check if users table is empty to determine if we should seed the default admin
