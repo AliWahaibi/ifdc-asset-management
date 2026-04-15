@@ -31,6 +31,11 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	if user.Status == "suspended" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Your account has been suspended. Please contact the administrator."})
+		return
+	}
+
 	// Check if the stored hash is a bcrypt hash
 	_, err := bcrypt.Cost([]byte(user.PasswordHash))
 	if err == nil {

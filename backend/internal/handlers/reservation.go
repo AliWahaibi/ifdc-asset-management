@@ -30,7 +30,7 @@ func GetReservations(c *gin.Context) {
 	var reservations []models.Reservation
 	var total int64
 
-	query := database.DB.Model(&models.Reservation{})
+	query := database.DB.Model(&models.Reservation{}).Preload("User").Preload("Project")
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -40,7 +40,7 @@ func GetReservations(c *gin.Context) {
 		return
 	}
 
-	if err := query.Preload("User").Offset(offset).Limit(limit).Find(&reservations).Error; err != nil {
+	if err := query.Preload("User").Preload("Project").Offset(offset).Limit(limit).Find(&reservations).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch reservations"})
 		return
 	}

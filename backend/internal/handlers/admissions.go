@@ -25,7 +25,8 @@ type AdmissionRequest struct {
 }
 
 type UpdateAdmissionStatusRequest struct {
-	Status string `json:"status" binding:"required,oneof=approved rejected"`
+	Status          string `json:"status" binding:"required,oneof=approved rejected"`
+	RejectionReason string `json:"rejection_reason"`
 }
 
 func CreateAdmission(c *gin.Context) {
@@ -219,6 +220,9 @@ func UpdateAdmissionStatus(c *gin.Context) {
 	}
 
 	project.Status = req.Status
+	if req.Status == "rejected" {
+		project.RejectionReason = req.RejectionReason
+	}
 	if err := tx.Save(&project).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update project status"})
@@ -242,6 +246,24 @@ func UpdateAdmissionStatus(c *gin.Context) {
 		return
 	}
 
+	// Log Asset History if approved
+	if req.Status == "approved" {
+		var reservations []models.Reservation
+		database.DB.Where("project_id = ?", project.ID).Find(&reservations)
+		for _, r := range reservations {
+			history := models.AssetHistory{
+				AssetType: r.AssetType,
+				AssetID:   r.AssetID,
+				ProjectID: &project.ID,
+				Action:    "checkout",
+				Notes:     fmt.Sprintf("Asset assigned to project: %s", project.Name),
+			}
+			database.DB.Create(&history)
+
+			// Update Asset Status to in_use (optional, depends on logic elsewhere)
+		}
+	}
+
 	var admin models.User
 	adminName := "Unknown Admin"
 	if err := database.DB.First(&admin, "id = ?", adminID).Error; err == nil {
@@ -260,4 +282,63 @@ func UpdateAdmissionStatus(c *gin.Context) {
 		"message": "Project status updated successfully",
 		"project": project,
 	})
+}
+
+// AssignAssets handles assigning multiple assets to a user/project in one transaction
+func AssignAssets(c *gin.Context) {
+	var req struct {
+		UserID    string   `json:"user_id" binding:"required"`
+		AssetIDs  []string `json:"asset_ids" binding:"required"`
+		AssetType string   `json:"asset_type" binding:"required"`
+		ProjectID *string  `json:"project_id"`
+		Notes     string   `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx := database.DB.Begin()
+	for _, id := range req.AssetIDs {
+		var err error
+		switch req.AssetType {
+		case "drone":
+			err = tx.Model(&models.DroneAsset{}).Where("id = ?", id).Update("status", "in_use").Error
+		case "battery":
+			err = tx.Model(&models.BatteryAsset{}).Where("id = ?", id).Update("status", "in_use").Error
+		case "accessory":
+			err = tx.Model(&models.AccessoryAsset{}).Where("id = ?", id).Update("status", "in_use").Error
+		default:
+			err = fmt.Errorf("invalid asset type")
+		}
+
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset: " + id})
+			return
+		}
+
+		history := models.AssetHistory{
+			AssetType:  req.AssetType,
+			AssetID:    id,
+			NewOwnerID: &req.UserID,
+			ProjectID:  req.ProjectID,
+			Action:     "assignment",
+			Notes:      req.Notes,
+		}
+		if err := tx.Create(&history).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log history for: " + id})
+			return
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit assignment transaction"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Assets assigned successfully"})
 }

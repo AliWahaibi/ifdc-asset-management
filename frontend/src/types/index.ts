@@ -72,15 +72,16 @@ export interface DroneMaintenanceLog {
 
 // ===== Office Category =====
 
-export type OfficeAssetCategory = 'furniture' | 'printer' | 'laptop' | 'desktop' | 'monitor' | 'phone' | 'networking' | 'other';
+// export type OfficeAssetCategory = 'furniture' | 'printer' | 'laptop' | 'desktop' | 'monitor' | 'phone' | 'networking' | 'other';
 
 export interface OfficeAsset {
     id: string;
     name: string;
-    category: OfficeAssetCategory;
+    category: string;
     serial_number: string;
-    status: AssetStatus;
+    status: string;
     department_id: string | null;
+    user_id?: string | null;
     department?: Department;
     assigned_to: string | null;
     assignee?: User;
@@ -127,6 +128,11 @@ export interface Reservation {
     start_date: string;
     end_date: string;
     notes: string;
+    rejection_reason?: string;
+    project?: {
+        name: string;
+        status: string;
+    };
     created_at: string;
     updated_at: string;
 }

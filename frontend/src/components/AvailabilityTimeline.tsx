@@ -13,6 +13,8 @@ export function AvailabilityTimeline() {
     const [userMap, setUserMap] = useState<Record<string, string>>({});
     const [assetMap, setAssetMap] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
+    const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -144,10 +146,14 @@ export function AvailabilityTimeline() {
                                                     key={res.id}
                                                     className="absolute inset-y-0 bg-gradient-to-r from-cyan-500 to-violet-500 border border-cyan-400/30 rounded-md flex items-center px-3 shadow-lg shadow-cyan-500/20 transition-all pointer-events-auto cursor-pointer overflow-hidden z-10 group/bar hover:-translate-y-0.5"
                                                     style={{ left: `${leftPerc}%`, width: `${widthPerc}%`, minWidth: '24px' }}
+                                                    onClick={() => {
+                                                        setSelectedRes(res);
+                                                        setIsModalOpen(true);
+                                                    }}
                                                 >
                                                     <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/bar:opacity-100 transition-opacity"></div>
                                                     <span className="text-[11px] font-extrabold tracking-wide text-white truncate drop-shadow-md whitespace-nowrap">
-                                                        {res.user?.full_name || userMap[res.user_id] || 'User'}
+                                                        {res.project?.name || 'Manual Reservation'} • {res.user?.full_name || userMap[res.user_id] || 'User'}
                                                     </span>
                                                 </div>
                                             );
@@ -158,6 +164,78 @@ export function AvailabilityTimeline() {
                         ))
                     )}
                 </div>
+            </div>
+
+            {/* Detailed Modal */}
+            {selectedRes && (
+                <ReservationDetailModal 
+                    isOpen={isModalOpen} 
+                    onClose={() => setIsModalOpen(false)} 
+                    reservation={selectedRes} 
+                    assetName={assetMap[selectedRes.asset_id]}
+                />
+            )}
+        </div>
+    );
+}
+
+function ReservationDetailModal({ isOpen, onClose, reservation, assetName }: { isOpen: boolean, onClose: () => void, reservation: Reservation, assetName: string }) {
+    return (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="relative w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+                <div className="mb-6 flex items-start justify-between">
+                    <div>
+                        <h3 className="text-xl font-bold text-white">{reservation.project?.name || 'Asset Reservation'}</h3>
+                        <p className="text-sm text-slate-400 mt-1">Requested by {reservation.user?.full_name || 'System User'}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
+                        reservation.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        reservation.status === 'rejected' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}>
+                        {reservation.status}
+                    </span>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="rounded-xl bg-slate-800/50 p-4 border border-slate-700/50">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Asset Details</p>
+                        <div className="flex items-center justify-between">
+                            <span className="text-slate-200 font-medium">{assetName}</span>
+                            <span className="text-xs text-slate-400 italic">ID: {reservation.asset_id.slice(0, 8)}...</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="rounded-xl bg-slate-800/50 p-4 border border-slate-700/50">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Start Date</p>
+                            <p className="text-sm text-slate-200">{new Date(reservation.start_date).toLocaleDateString()}</p>
+                        </div>
+                        <div className="rounded-xl bg-slate-800/50 p-4 border border-slate-700/50">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">End Date</p>
+                            <p className="text-sm text-slate-200">{new Date(reservation.end_date).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+
+                    {reservation.notes && (
+                        <div className="rounded-xl bg-slate-800/50 p-4 border border-slate-700/50">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Notes / Reason</p>
+                            <p className="text-sm text-slate-300 italic">"{reservation.notes}"</p>
+                        </div>
+                    )}
+
+                    {reservation.status === 'rejected' && reservation.rejection_reason && (
+                        <div className="rounded-xl bg-red-500/10 p-4 border border-red-500/20 text-red-100">
+                            <p className="text-xs font-bold uppercase tracking-widest mb-1">Rejection Reason</p>
+                            <p className="text-sm">{reservation.rejection_reason}</p>
+                        </div>
+                    )}
+                </div>
+
+                <button onClick={onClose} className="mt-8 w-full rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition-colors">
+                    Close Details
+                </button>
             </div>
         </div>
     );

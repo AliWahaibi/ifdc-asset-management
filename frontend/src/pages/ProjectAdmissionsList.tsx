@@ -32,6 +32,7 @@ interface Project {
         email: string;
     };
     requested_assets: Reservation[];
+    rejection_reason?: string;
 }
 
 export function ProjectAdmissionsList() {
@@ -58,8 +59,12 @@ export function ProjectAdmissionsList() {
     }, []);
 
     const handleStatusUpdate = async (id: string, status: 'approved' | 'rejected') => {
+        let reason = '';
+        if (status === 'rejected') {
+            reason = window.prompt('Please enter a reason for rejection (optional):') || '';
+        }
         try {
-            await admissionService.updateAdmissionStatus(id, status);
+            await admissionService.updateAdmissionStatus(id, status, reason);
             toast.success(`Project ${status} successfully`);
             fetchProjects();
         } catch (error) {
@@ -149,6 +154,11 @@ export function ProjectAdmissionsList() {
                             </button>
                         </>
                     )}
+                    {row.status === 'rejected' && row.rejection_reason && (
+                        <div className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded" title={row.rejection_reason}>
+                            Rejected: {row.rejection_reason.length > 20 ? row.rejection_reason.substring(0, 20) + '...' : row.rejection_reason}
+                        </div>
+                    )}
                 </div>
             ),
         },
@@ -205,6 +215,12 @@ export function ProjectAdmissionsList() {
                             <StatusBadge status={asset.status as BadgeStatus} />
                         </div>
                     ))}
+                    {selectedProject?.rejection_reason && (
+                        <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
+                            <div className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1">Rejection Reason</div>
+                            <div className="text-sm text-slate-300 italic">"{selectedProject.rejection_reason}"</div>
+                        </div>
+                    )}
                     {(!selectedProject?.requested_assets || selectedProject.requested_assets.length === 0) && (
                         <div className="text-center text-slate-400 py-4">No assets requested for this project.</div>
                     )}

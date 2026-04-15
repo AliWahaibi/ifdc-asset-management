@@ -39,4 +39,33 @@ export const operationService = {
     deleteDrone: async (id: string): Promise<void> => {
         await apiClient.delete(`/operations/drones/${id}`);
     },
+
+    resolveMaintenance: async (id: string, notes: string): Promise<DroneAsset> => {
+        const response = await apiClient.post<DroneAsset>(`/operations/drones/${id}/maintenance/resolve`, { notes });
+        return response.data;
+    },
+
+    assignAssets: async (data: { user_id: string, asset_ids: string[], asset_type: string, notes?: string }): Promise<void> => {
+        await apiClient.post('/operations/assignments', data);
+    },
+
+    getBatteries: async (): Promise<{ data: any[] }> => {
+        const response = await apiClient.get<{ data: any[] }>('/operations/batteries');
+        return response.data;
+    },
+
+    getAccessories: async (): Promise<{ data: any[] }> => {
+        const response = await apiClient.get<{ data: any[] }>('/operations/accessories');
+        return response.data;
+    },
+
+    createBattery: async (data: { name: string, model: string, serial_number: string, cycle_count: number }): Promise<any> => {
+        const response = await apiClient.post('/operations/batteries', data);
+        return response.data;
+    },
+
+    createAccessory: async (data: { name: string, type: string, serial_number: string }): Promise<any> => {
+        const response = await apiClient.post('/operations/accessories', data);
+        return response.data;
+    },
 };

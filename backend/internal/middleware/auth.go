@@ -68,11 +68,16 @@ func RequireAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Security Fix: Check if user exists in DB
+		// Security Fix: Check if user exists in DB and is active
 		var user models.User
 		if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 			// User deleted or not found
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "User no longer exists"})
+			return
+		}
+
+		if user.Status == "suspended" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Your account has been suspended. Please contact the administrator."})
 			return
 		}
 

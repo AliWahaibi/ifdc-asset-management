@@ -31,7 +31,17 @@ func RBACMiddleware() gin.HandlerFunc {
 		// Team Leaders: GET, POST, and specific PATCH
 		if role == "team_leader" {
 			if method == http.MethodGet {
-				if strings.HasPrefix(path, "/api/users") || strings.HasPrefix(path, "/api/settings") || strings.HasPrefix(path, "/api/statistics") {
+				if strings.HasPrefix(path, "/api/users") {
+					// Exception: Allow seeing own profile or own user ID
+					currentUserID := c.GetString("userID")
+					if path == "/api/users/profile" || path == "/api/users/"+currentUserID {
+						c.Next()
+						return
+					}
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+					return
+				}
+				if strings.HasPrefix(path, "/api/settings") || strings.HasPrefix(path, "/api/statistics") {
 					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 					return
 				}
@@ -42,7 +52,7 @@ func RBACMiddleware() gin.HandlerFunc {
 				c.Next()
 				return
 			}
-			if method == http.MethodPatch && strings.HasPrefix(path, "/api/reservations/") && strings.HasSuffix(path, "/status") {
+			if method == http.MethodPatch && (strings.HasPrefix(path, "/api/reservations/") || strings.HasPrefix(path, "/api/admissions/")) && strings.HasSuffix(path, "/status") {
 				// Explicitly check that they are ONLY updating status to "approved" or "denied"
 				bodyBytes, err := io.ReadAll(c.Request.Body)
 				if err == nil {
@@ -69,14 +79,24 @@ func RBACMiddleware() gin.HandlerFunc {
 		// Employees: GET and specific POST
 		if role == "employee" {
 			if method == http.MethodGet {
-				if strings.HasPrefix(path, "/api/users") || strings.HasPrefix(path, "/api/settings") || strings.HasPrefix(path, "/api/statistics") {
+				if strings.HasPrefix(path, "/api/users") {
+					// Exception: Allow seeing own profile or own user ID
+					currentUserID := c.GetString("userID")
+					if path == "/api/users/profile" || path == "/api/users/"+currentUserID {
+						c.Next()
+						return
+					}
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+					return
+				}
+				if strings.HasPrefix(path, "/api/settings") || strings.HasPrefix(path, "/api/statistics") {
 					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 					return
 				}
 				c.Next()
 				return
 			}
-			if method == http.MethodPost && path == "/api/reservations" {
+			if method == http.MethodPost && (path == "/api/reservations" || path == "/api/admissions") {
 				c.Next()
 				return
 			}

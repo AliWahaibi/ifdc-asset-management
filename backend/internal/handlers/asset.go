@@ -108,6 +108,17 @@ func GetOfficeAssets(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": assets, "total": total, "page": page, "limit": limit})
 }
 
+// GetOfficeCategories retrieves all unique categories for office assets
+func GetOfficeCategories(c *gin.Context) {
+	var categories []models.Category
+	if err := database.DB.Where("asset_type = ?", "office").Order("name ASC").Find(&categories).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch categories"})
+		return
+	}
+	c.JSON(http.StatusOK, categories)
+}
+
+
 // GetRndAssets retrieves paginated R&D assets
 func GetRndAssets(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -162,7 +173,7 @@ func CreateDrone(c *gin.Context) {
 		Name             string  `json:"name" binding:"required,min=2,max=255"`
 		Model            string  `json:"model" binding:"required,min=2,max=255"`
 		SerialNumber     string  `json:"serial_number" binding:"required,min=2,max=100"`
-		Status           string  `json:"status" binding:"required,oneof=available in_use maintenance reserved retired"`
+		Status           string  `json:"status"`
 		DepartmentID     *string `json:"department_id"`
 		TotalFlightHours float64 `json:"total_flight_hours"`
 		Notes            string  `json:"notes" binding:"max=2000"`
@@ -177,10 +188,14 @@ func CreateDrone(c *gin.Context) {
 		Name:             input.Name,
 		Model:            input.Model,
 		SerialNumber:     input.SerialNumber,
-		Status:           input.Status,
+		Status:           "Available",
 		DepartmentID:     input.DepartmentID,
 		TotalFlightHours: input.TotalFlightHours,
 		Notes:            input.Notes,
+	}
+
+	if input.Status != "" {
+		drone.Status = input.Status
 	}
 
 	if err := database.DB.Create(&drone).Error; err != nil {
@@ -199,9 +214,9 @@ func CreateDrone(c *gin.Context) {
 func CreateOfficeAsset(c *gin.Context) {
 	var input struct {
 		Name         string  `json:"name" binding:"required,min=2,max=255"`
-		Category     string  `json:"category" binding:"required,oneof=furniture printer laptop desktop monitor phone networking other"`
+		Category     string  `json:"category" binding:"required"`
 		SerialNumber string  `json:"serial_number" binding:"required,min=2,max=100"`
-		Status       string  `json:"status" binding:"required,oneof=available in_use maintenance reserved retired"`
+		Status       string  `json:"status"`
 		DepartmentID *string `json:"department_id"`
 		AssignedTo   *string `json:"assigned_to"`
 		Notes        string  `json:"notes" binding:"max=2000"`
@@ -212,14 +227,34 @@ func CreateOfficeAsset(c *gin.Context) {
 		return
 	}
 
+	// Handle Dynamic Category
+	var category models.Category
+	if err := database.DB.Where("LOWER(name) = LOWER(?) AND asset_type = ?", input.Category, "office").First(&category).Error; err != nil {
+		category = models.Category{
+			Name:      input.Category,
+			AssetType: "office",
+		}
+		if err := database.DB.Create(&category).Error; err != nil {
+			// Ignore if already exists (race condition)
+			if !database.IsUniqueConstraintError(err) {
+				// We don't want to fail the whole asset creation if category insertion fails
+				// But we should log it
+			}
+		}
+	}
+
 	asset := models.OfficeAsset{
 		Name:         input.Name,
 		Category:     input.Category,
 		SerialNumber: input.SerialNumber,
-		Status:       input.Status,
+		Status:       "Available",
 		DepartmentID: input.DepartmentID,
 		AssignedTo:   input.AssignedTo,
 		Notes:        input.Notes,
+	}
+
+	if input.Status != "" {
+		asset.Status = input.Status
 	}
 
 	if err := database.DB.Create(&asset).Error; err != nil {
@@ -295,6 +330,17 @@ func UpdateDrone(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
 		return
 	}
+
+	// Maintenance Threshold Check
+	if hours, ok := input["total_flight_hours"].(float64); ok {
+		var settings models.SystemSetting
+		if err := database.DB.First(&settings).Error; err == nil {
+			if int(hours) >= settings.MaintenanceThresholdHours {
+				database.DB.Model(&asset).Update("status", "Maintenance")
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, asset)
 }
 
@@ -381,4 +427,126 @@ func DeleteRndAsset(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Asset deleted successfully"})
+}
+
+// ResolveMaintenance clears the maintenance state of a drone
+func ResolveMaintenance(c *gin.Context) {
+	id := c.Param("id")
+	var drone models.DroneAsset
+	if err := database.DB.First(&drone, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Drone not found"})
+		return
+	}
+
+	drone.Status = "Available"
+	now := time.Now()
+	drone.LastMaintenanceDate = &now
+	
+	if err := database.DB.Save(&drone).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve maintenance"})
+		return
+	}
+
+	// Log the action (AssetHistory)
+	userID := c.GetString("userID")
+	history := models.AssetHistory{
+		AssetType: "drone",
+		AssetID:   drone.ID,
+		Action:    "maintenance_resolution",
+		Notes:     "Maintenance completed by technician",
+	}
+	if userID != "" {
+		history.NewOwnerID = &userID
+	}
+	database.DB.Create(&history)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Maintenance resolved successfully", "drone": drone})
+}
+
+// GetBatteries retrieves all batteries
+func GetBatteries(c *gin.Context) {
+	var batteries []models.BatteryAsset
+	if err := database.DB.Find(&batteries).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch batteries"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": batteries})
+}
+
+// GetAccessories retrieves all accessories
+func GetAccessories(c *gin.Context) {
+	var accessories []models.AccessoryAsset
+	if err := database.DB.Find(&accessories).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch accessories"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": accessories})
+}
+
+// CreateBattery godoc
+func CreateBattery(c *gin.Context) {
+	var input struct {
+		Name         string  `json:"name" binding:"required"`
+		Model        string  `json:"model" binding:"required"`
+		SerialNumber string  `json:"serial_number" binding:"required"`
+		CycleCount   int     `json:"cycle_count"`
+		DepartmentID *string `json:"department_id"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	battery := models.BatteryAsset{
+		Name:         input.Name,
+		Model:        input.Model,
+		SerialNumber: input.SerialNumber,
+		CycleCount:   input.CycleCount,
+		Status:       "Available",
+	}
+
+	if err := database.DB.Create(&battery).Error; err != nil {
+		if database.IsUniqueConstraintError(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "A battery with this serial number already exists"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create battery asset"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, battery)
+}
+
+// CreateAccessory godoc
+func CreateAccessory(c *gin.Context) {
+	var input struct {
+		Name         string `json:"name" binding:"required"`
+		Type         string `json:"type" binding:"required"`
+		SerialNumber string `json:"serial_number" binding:"required"`
+		Status       string `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	accessory := models.AccessoryAsset{
+		Name:         input.Name,
+		Type:         input.Type,
+		SerialNumber: input.SerialNumber,
+		Status:       "Available",
+	}
+
+	if err := database.DB.Create(&accessory).Error; err != nil {
+		if database.IsUniqueConstraintError(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "An accessory with this serial number already exists"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create accessory asset"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, accessory)
 }

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Monitor, Plus, CalendarCheck, Edit2, Trash2 } from 'lucide-react';
+import { Monitor, Plus, CalendarCheck, Edit2, Trash2, ArrowLeft } from 'lucide-react';
+import CreatableSelect from 'react-select/creatable';
+import Select from 'react-select';
 import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -10,6 +12,8 @@ import { officeService, type CreateOfficeAssetData } from '@/services/officeServ
 import { reservationService } from '@/services/reservationService';
 import { useAuthStore } from '@/stores/authStore';
 import { hasAnyRole } from '@/lib/roles';
+import { userService } from '@/services/userService';
+import type { User } from '@/types';
 import toast from 'react-hot-toast';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -20,7 +24,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function OfficeDashboard() {
     const { user } = useAuthStore();
-    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin']) : false;
+    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'manager']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
 
     const [reservationModalOpen, setReservationModalOpen] = useState(false);
@@ -68,7 +72,7 @@ export function OfficeDashboard() {
             render: (row) => <span className="text-sm">{CATEGORY_LABELS[row.category] ?? row.category}</span>,
         },
         { key: 'serial_number', header: 'Serial Number' },
-        { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+        { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status as any} /> },
         {
             key: 'id',
             header: 'Actions',
@@ -89,10 +93,16 @@ export function OfficeDashboard() {
                                 onClick={() => {
                                     setEditingId(row.id);
                                     setFormData({
-                                        name: row.name, category: row.category, serial_number: row.serial_number,
-                                        status: row.status, department_id: row.department_id,
-                                        assigned_to: row.assigned_to, purchase_date: row.purchase_date,
-                                        warranty_expiry: row.warranty_expiry, notes: row.notes,
+                                        name: row.name, 
+                                        category: row.category, 
+                                        serial_number: row.serial_number,
+                                        status: row.status, 
+                                        department_id: row.department_id ?? null,
+                                        user_id: row.user_id ?? null, 
+                                        assigned_to: row.assigned_to ?? null, 
+                                        purchase_date: row.purchase_date ?? null,
+                                        warranty_expiry: row.warranty_expiry ?? null, 
+                                        notes: row.notes,
                                     });
                                     setModalOpen(true);
                                 }}
@@ -126,14 +136,16 @@ export function OfficeDashboard() {
     ];
 
     const [assets, setAssets] = useState<OfficeAsset[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [categories, setCategories] = useState<{ value: string, label: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState<CreateOfficeAssetData>({
-        name: '', category: 'laptop', serial_number: '', status: 'available',
-        department_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: ''
+        name: '', category: 'laptop', serial_number: '', status: 'Available',
+        department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: ''
     });
 
     const fetchAssets = async () => {
@@ -148,8 +160,32 @@ export function OfficeDashboard() {
         }
     };
 
+    const fetchUsers = async () => {
+        try {
+            const data = await userService.getUsers(1, 1000);
+            setUsers(data.data || []);
+        } catch (error) {
+            console.error('Failed to load users');
+        }
+    };
+
+    const fetchCategories = async () => {
+        try {
+            const data = await officeService.getCategories();
+            const formatted = data.map(c => ({
+                value: c.name,
+                label: CATEGORY_LABELS[c.name] || c.name.charAt(0).toUpperCase() + c.name.slice(1)
+            }));
+            setCategories(formatted);
+        } catch (error) {
+            console.error('Failed to load categories');
+        }
+    };
+
     useEffect(() => {
         fetchAssets();
+        fetchUsers();
+        fetchCategories();
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -165,8 +201,9 @@ export function OfficeDashboard() {
             }
             setModalOpen(false);
             setEditingId(null);
-            setFormData({ name: '', category: 'laptop', serial_number: '', status: 'available', department_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
+            setFormData({ name: '', category: 'laptop', serial_number: '', status: 'Available', department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
             fetchAssets();
+            fetchCategories();
         } catch (error) {
             toast.error('Failed to create office asset');
         } finally {
@@ -186,7 +223,7 @@ export function OfficeDashboard() {
                     </h1>
                     <p className="mt-3 text-lg text-slate-400">Track office equipment, furniture, and IT assets.</p>
                 </div>
-                {user && hasAnyRole(user.role, ['super_admin', 'admin', 'manager']) && (
+                {user && hasAnyRole(user.role, ['super_admin', 'manager']) && (
                     <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-violet-500/40 active:scale-[0.97]">
                         <Plus className="h-4 w-4" /> Add Asset
                     </button>
@@ -218,14 +255,64 @@ export function OfficeDashboard() {
             <Modal isOpen={modalOpen} onClose={() => {
                 setModalOpen(false);
                 setEditingId(null);
-                setFormData({ name: '', category: 'laptop', serial_number: '', status: 'available', department_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
+                setFormData({ name: '', category: 'laptop', serial_number: '', status: 'Available', department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
             }} title={editingId ? 'Edit Office Asset' : 'Add Office Asset'} size="lg">
                 <form className="space-y-5" onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Asset Name</label><input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g. Dell Latitude" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
-                        <div><label className="mb-2 block text-sm font-medium text-slate-200">Category</label><select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value as any })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500"><option value="laptop">Laptop</option><option value="desktop">Desktop</option><option value="monitor">Monitor</option><option value="printer">Printer</option><option value="phone">Phone</option><option value="furniture">Furniture</option><option value="other">Other</option></select></div>
+                        <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Category</label>
+                            <CreatableSelect
+                                isClearable
+                                options={categories.length > 0 ? categories : Object.entries(CATEGORY_LABELS).map(([val, label]) => ({ value: val, label }))}
+                                value={formData.category ? { value: formData.category, label: CATEGORY_LABELS[formData.category] || formData.category } : null}
+                                onChange={(option: any) => setFormData({ ...formData, category: option?.value || '' })}
+                                onCreateOption={async (inputValue) => {
+                                    setFormData({ ...formData, category: inputValue });
+                                    setCategories(prev => [...prev, { value: inputValue, label: inputValue }]);
+                                }}
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        backgroundColor: '#1E293B',
+                                        borderColor: '#334155',
+                                        borderRadius: '0.75rem',
+                                        padding: '0.2rem 0.5rem',
+                                        color: 'white',
+                                    }),
+                                    menu: (base) => ({ ...base, backgroundColor: '#1E293B', borderColor: '#334155' }),
+                                    option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? '#334155' : 'transparent', color: 'white' }),
+                                    singleValue: (base) => ({ ...base, color: 'white' }),
+                                    input: (base) => ({ ...base, color: 'white' }),
+                                }}
+                            />
+                        </div>
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Serial Number</label><input required type="text" value={formData.serial_number} onChange={e => setFormData({ ...formData, serial_number: e.target.value })} placeholder="XX-XXXX-XXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
+                        <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Assign to User</label>
+                            <Select
+                                isClearable
+                                options={users.map(u => ({ value: u.id, label: u.full_name }))}
+                                value={formData.user_id ? { value: formData.user_id, label: users.find(u => u.id === formData.user_id)?.full_name || 'Unknown' } : null}
+                                onChange={(option: any) => setFormData({ ...formData, user_id: option?.value || null })}
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        backgroundColor: '#1E293B',
+                                        borderColor: '#334155',
+                                        borderRadius: '0.75rem',
+                                        padding: '0.2rem 0.5rem',
+                                        color: 'white',
+                                    }),
+                                    menu: (base) => ({ ...base, backgroundColor: '#1E293B', borderColor: '#334155' }),
+                                    option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? '#334155' : 'transparent', color: 'white' }),
+                                    singleValue: (base) => ({ ...base, color: 'white' }),
+                                    input: (base) => ({ ...base, color: 'white' }),
+                                }}
+                            />
+                        </div>
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Purchase Date</label><input required type="date" value={formData.purchase_date || ''} onChange={e => setFormData({ ...formData, purchase_date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
+                        <div><label className="mb-2 block text-sm font-medium text-slate-200">Warranty Expiry</label><input type="date" value={formData.warranty_expiry || ''} onChange={e => setFormData({ ...formData, warranty_expiry: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-200">Notes / Details</label><input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Location, specs..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">

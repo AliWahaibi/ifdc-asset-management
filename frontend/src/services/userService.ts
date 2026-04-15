@@ -16,6 +16,12 @@ export const userService = {
         return response.data;
     },
 
+    // Get current user's profile with assigned assets
+    getProfile: async (): Promise<{ user: User, office_assets: any[] }> => {
+        const response = await apiClient.get('/users/profile');
+        return response.data;
+    },
+
     // Create a new user (with file upload support)
     createUser: async (data: FormData): Promise<User> => {
         const response = await apiClient.post<User>('/users', data, {
@@ -39,5 +45,10 @@ export const userService = {
     // Delete a user
     deleteUser: async (id: string): Promise<void> => {
         await apiClient.delete(`/users/${id}`);
+    },
+
+    // Update user status (active/suspended)
+    updateUserStatus: async (id: string, status: string): Promise<void> => {
+        await apiClient.patch(`/users/${id}/status`, { status });
     },
 };

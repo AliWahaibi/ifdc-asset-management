@@ -55,10 +55,14 @@ func SetupRouter() *gin.Engine {
 		{
 			// GET /api/users to return mock users list
 			users.GET("", handlers.GetUsers)
+			// GET /api/users/:id to return specific user
+			users.GET("/:id", handlers.GetUser)
 			// POST /api/users to handle multipart form data
 			users.POST("", handlers.UploadUserFiles)
 			users.PUT("/:id", handlers.UploadUserFiles)
+			users.PATCH("/:id/status", handlers.UpdateUserStatus)
 			users.DELETE("/:id", handlers.DeleteUser)
+			users.GET("/profile", handlers.GetProfile)
 		}
 
 		// Reservations workflow
@@ -78,9 +82,15 @@ func SetupRouter() *gin.Engine {
 		operations.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			operations.GET("/drones", handlers.GetDrones)
+			operations.GET("/batteries", handlers.GetBatteries)
+			operations.GET("/accessories", handlers.GetAccessories)
 			operations.POST("/drones", handlers.CreateDrone)
+			operations.POST("/batteries", handlers.CreateBattery)
+			operations.POST("/accessories", handlers.CreateAccessory)
+			operations.POST("/assignments", handlers.AssignAssets)
 			operations.PUT("/drones/:id", handlers.UpdateDrone)
 			operations.DELETE("/drones/:id", handlers.DeleteDrone)
+			operations.POST("/drones/:id/maintenance/resolve", handlers.ResolveMaintenance)
 		}
 
 		// Office group
@@ -88,6 +98,7 @@ func SetupRouter() *gin.Engine {
 		office.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			office.GET("/assets", handlers.GetOfficeAssets)
+			office.GET("/categories", handlers.GetOfficeCategories)
 			office.POST("/assets", handlers.CreateOfficeAsset)
 			office.PUT("/assets/:id", handlers.UpdateOfficeAsset)
 			office.DELETE("/assets/:id", handlers.DeleteOfficeAsset)

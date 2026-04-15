@@ -223,6 +223,83 @@ func DeleteUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 }
 
+// UpdateUserStatus toggles user status between 'active' and 'suspended'
+func UpdateUserStatus(c *gin.Context) {
+	id := c.Param("id")
+	var input struct {
+		Status string `json:"status" binding:"required,oneof=active suspended"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	user.Status = input.Status
+	if err := database.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user status"})
+		return
+	}
+
+	database.CreateLog("WARNING", "User Status Change", fmt.Sprintf("User %s status changed to %s", user.Email, input.Status), &user.ID)
+
+	c.JSON(http.StatusOK, user)
+}
+
+// GetProfile returns the current user's profile and assigned office assets
+func GetProfile(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: missing user ID"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	var assets []models.OfficeAsset
+	database.DB.Where("assigned_to = ? OR user_id = ?", userID, userID).Find(&assets)
+
+	c.JSON(http.StatusOK, gin.H{
+		"user":          user,
+		"office_assets": assets,
+	})
+}
+
+// GetUser returns a specific user's detailed info, assets, and admissions
+func GetUser(c *gin.Context) {
+	id := c.Param("id")
+
+	var user models.User
+	if err := database.DB.First(&user, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Fetch assigned office assets
+	var assets []models.OfficeAsset
+	database.DB.Where("assigned_to = ? OR user_id = ?", id, id).Find(&assets)
+
+	// Fetch recent admissions (projects)
+	var admissions []models.Project
+	database.DB.Where("user_id = ?", id).Order("created_at desc").Find(&admissions)
+
+	c.JSON(http.StatusOK, gin.H{
+		"user":          user,
+		"office_assets": assets,
+		"admissions":    admissions,
+	})
+}
+
 // Helper to validate MIME types
 func isValidMimeType(mime string) bool {
 	allowed := map[string]bool{

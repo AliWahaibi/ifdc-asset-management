@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { Shield, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { AuroraBackground } from '@/components/ui/aurora-background';
+import loginLogo from '@/assets/Asset 4.png';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export function LoginPage() {
     const navigate = useNavigate();
@@ -42,12 +43,8 @@ export function LoginPage() {
         <AuroraBackground>
             <div className="relative z-10 w-full max-w-md animate-fade-in">
                 {/* Logo */}
-                <div className="mb-8 text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-violet-500 shadow-xl shadow-cyan-500/20">
-                        <Shield className="h-7 w-7 text-white" />
-                    </div>
-                    <h1 className="mt-4 text-2xl font-bold text-slate-100">IFDC Asset Management</h1>
-                    <p className="mt-1 text-sm text-slate-500">Ibn Firnas Drone Center</p>
+                <div className="mb-12 text-center flex flex-col items-center">
+                    <img src={loginLogo} alt="AeroTrack" className="h-24 w-auto drop-shadow-2xl" />
                 </div>
 
                 {/* Login Card */}

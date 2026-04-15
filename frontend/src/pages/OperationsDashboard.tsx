@@ -7,6 +7,7 @@ import type { Column } from '@/components/ui/DataTable';
 import type { DroneAsset } from '@/types';
 
 import { operationService, type CreateDroneData } from '@/services/operationService';
+import { userService } from '@/services/userService';
 import { reservationService } from '@/services/reservationService';
 import { useAuthStore } from '@/stores/authStore';
 import { hasAnyRole } from '@/lib/roles';
@@ -14,7 +15,7 @@ import toast from 'react-hot-toast';
 
 export function OperationsDashboard() {
     const { user } = useAuthStore();
-    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin']) : false;
+    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'manager']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
 
     const [reservationModalOpen, setReservationModalOpen] = useState(false);
@@ -100,6 +101,23 @@ export function OperationsDashboard() {
                         <CalendarCheck className="h-3.5 w-3.5" />
                         Reserve
                     </button>
+                    {row.status === 'maintenance' && (
+                        <button
+                            onClick={() => {
+                                const notes = window.prompt('Enter maintenance notes (optional):') || 'Routine maintenance completed.';
+                                operationService.resolveMaintenance(row.id, notes).then(() => {
+                                    toast.success('Maintenance resolved');
+                                    fetchDrones();
+                                }).catch(() => {
+                                    toast.error('Failed to resolve maintenance');
+                                });
+                            }}
+                            className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+                        >
+                            <Wrench className="h-3.5 w-3.5" />
+                            Clear
+                        </button>
+                    )}
                     {canEdit && (
                         <>
                             <button
@@ -109,7 +127,10 @@ export function OperationsDashboard() {
                                         name: row.name, model: row.model, serial_number: row.serial_number,
                                         status: row.status, department_id: row.department_id,
                                         total_flight_hours: row.total_flight_hours, notes: row.notes,
+                                        cycle_count: 0,
+                                        type: '',
                                     });
+                                    setAssetType('drone');
                                     setModalOpen(true);
                                 }}
                                 className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
@@ -145,9 +166,10 @@ export function OperationsDashboard() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [assetType, setAssetType] = useState<'drone' | 'battery' | 'accessory'>('drone');
 
     // Form State
-    const [formData, setFormData] = useState<CreateDroneData>({
+    const [formData, setFormData] = useState<any>({
         name: '',
         model: '',
         serial_number: '',
@@ -155,6 +177,8 @@ export function OperationsDashboard() {
         department_id: null,
         total_flight_hours: 0,
         notes: '',
+        cycle_count: 0,
+        type: '',
     });
 
     const fetchDrones = async () => {
@@ -177,24 +201,54 @@ export function OperationsDashboard() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            // Convert to number if needed
-            const payload = { ...formData, total_flight_hours: Number(formData.total_flight_hours) };
             if (editingId) {
+                // Edit only supports drones for now based on current UI
+                const payload = { ...formData, total_flight_hours: Number(formData.total_flight_hours) };
                 await operationService.updateDrone(editingId, payload);
                 toast.success('Drone asset updated successfully');
             } else {
-                await operationService.createDrone(payload);
-                toast.success('Drone asset created successfully');
+                if (assetType === 'drone') {
+                    const payload = { ...formData, total_flight_hours: Number(formData.total_flight_hours) };
+                    await operationService.createDrone(payload);
+                } else if (assetType === 'battery') {
+                    await operationService.createBattery({
+                        name: formData.name,
+                        model: formData.model,
+                        serial_number: formData.serial_number,
+                        cycle_count: Number(formData.cycle_count) || 0
+                    });
+                } else if (assetType === 'accessory') {
+                    await operationService.createAccessory({
+                        name: formData.name,
+                        type: formData.type,
+                        serial_number: formData.serial_number
+                    });
+                }
+                toast.success(`${assetType.charAt(0).toUpperCase() + assetType.slice(1)} asset created successfully`);
             }
             setModalOpen(false);
             setEditingId(null);
-            setFormData({ name: '', model: '', serial_number: '', status: 'available', department_id: null, total_flight_hours: 0, notes: '' });
+            resetForm();
             fetchDrones();
         } catch (error) {
-            toast.error('Failed to create drone asset');
+            toast.error(`Failed to ${editingId ? 'update' : 'create'} asset`);
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const resetForm = () => {
+        setFormData({
+            name: '',
+            model: '',
+            serial_number: '',
+            status: 'available',
+            department_id: null,
+            total_flight_hours: 0,
+            notes: '',
+            cycle_count: 0,
+            type: '',
+        });
     };
 
     return (
@@ -212,14 +266,20 @@ export function OperationsDashboard() {
                         Manage drone assets, track flight hours, and schedule maintenance.
                     </p>
                 </div>
-                {user && hasAnyRole(user.role, ['super_admin', 'admin', 'manager']) && (
-                    <button
-                        onClick={() => setModalOpen(true)}
-                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.97]"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Add Drone
-                    </button>
+                {user && hasAnyRole(user.role, ['super_admin', 'manager']) && (
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => {
+                                setEditingId(null);
+                                resetForm();
+                                setModalOpen(true);
+                            }}
+                            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.97]"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Add Asset
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -256,36 +316,80 @@ export function OperationsDashboard() {
             <Modal isOpen={modalOpen} onClose={() => {
                 setModalOpen(false);
                 setEditingId(null);
-                setFormData({ name: '', model: '', serial_number: '', status: 'available', department_id: null, total_flight_hours: 0, notes: '' });
-            }} title={editingId ? 'Edit Drone Asset' : 'Add New Drone'} size="lg">
+                resetForm();
+            }} title={editingId ? 'Edit Drone Asset' : `Add New ${assetType.charAt(0).toUpperCase() + assetType.slice(1)}`} size="lg">
                 <form className="space-y-5" onSubmit={handleSubmit}>
+                    {!editingId && (
+                        <div className="rounded-xl bg-slate-800/50 p-4 border border-slate-700/50">
+                            <label className="mb-2 block text-xs font-bold uppercase tracking-widest text-slate-500">Inventory Classification</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {(['drone', 'battery', 'accessory'] as const).map((type) => (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => setAssetType(type)}
+                                        className={`rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+                                            assetType === type 
+                                            ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' 
+                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                        }`}
+                                    >
+                                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Drone Name</label>
-                            <input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g. DJI Matrice 350" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                        <div className="sm:col-span-2">
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Asset Name</label>
+                            <input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder={`e.g. ${assetType === 'drone' ? 'DJI Matrice 350' : assetType === 'battery' ? 'TB65 Intelligent Battery' : 'Zenmuse H20N'}`} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
                         </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Model</label>
-                            <input required type="text" value={formData.model} onChange={e => setFormData({ ...formData, model: e.target.value })} placeholder="e.g. Matrice 350 RTK" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
-                        </div>
+
+                        {assetType !== 'accessory' && (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Model</label>
+                                <input required type="text" value={formData.model} onChange={e => setFormData({ ...formData, model: e.target.value })} placeholder="e.g. M350-RTK" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                        )}
+
+                        {assetType === 'accessory' && (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Accessory Type</label>
+                                <input required type="text" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value })} placeholder="e.g. Camera, Props, Controller" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                        )}
+
                         <div>
                             <label className="mb-2 block text-sm font-medium text-slate-200">Serial Number</label>
                             <input required type="text" value={formData.serial_number} onChange={e => setFormData({ ...formData, serial_number: e.target.value })} placeholder="SN-XXXX-XXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
                         </div>
+
+                        {assetType === 'drone' && (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Total Flight Hours</label>
+                                <input type="number" min="0" step="0.1" value={formData.total_flight_hours} onChange={e => setFormData({ ...formData, total_flight_hours: parseFloat(e.target.value) || 0 })} placeholder="e.g. 150.5" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                        )}
+
+                        {assetType === 'battery' && (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Cycle Count</label>
+                                <input type="number" min="0" value={formData.cycle_count} onChange={e => setFormData({ ...formData, cycle_count: parseInt(e.target.value) || 0 })} placeholder="e.g. 42" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                        )}
+
                         <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Status</label>
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Initial Status</label>
                             <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as any })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
                                 <option value="available">Available</option>
-                                <option value="in_use">In Use</option>
                                 <option value="maintenance">Maintenance</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Total Flight Hours</label>
-                            <input type="number" min="0" step="0.1" value={formData.total_flight_hours} onChange={e => setFormData({ ...formData, total_flight_hours: parseFloat(e.target.value) || 0 })} placeholder="e.g. 150.5" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
-                        </div>
+
                         <div className="sm:col-span-2">
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Notes</label>
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Inventory Notes</label>
                             <input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Any additional information..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
                         </div>
                     </div>
@@ -293,32 +397,6 @@ export function OperationsDashboard() {
                         <button type="button" onClick={() => setModalOpen(false)} className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-400 hover:bg-slate-800">Cancel</button>
                         <button type="submit" disabled={submitting} className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center gap-2">
                             {submitting ? 'Saving...' : (editingId ? 'Update Drone' : 'Create Drone')}
-                        </button>
-                    </div>
-                </form>
-            </Modal>
-
-            {/* Reservation Modal */}
-            <Modal isOpen={reservationModalOpen} onClose={() => setReservationModalOpen(false)} title={`Request Reservation: ${selectedAsset?.name}`}>
-                <form onSubmit={handleReservationSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-300">Start Date</label>
-                            <input required type="datetime-local" value={reservationForm.start_date} onChange={e => setReservationForm({ ...reservationForm, start_date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-300">End Date</label>
-                            <input required type="datetime-local" value={reservationForm.end_date} onChange={e => setReservationForm({ ...reservationForm, end_date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-300">Reason / Notes</label>
-                        <textarea required value={reservationForm.notes} onChange={e => setReservationForm({ ...reservationForm, notes: e.target.value })} className="h-24 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" placeholder="Please provide a valid reason..."></textarea>
-                    </div>
-                    <div className="mt-6 flex justify-end gap-3">
-                        <button type="button" onClick={() => setReservationModalOpen(false)} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors">Cancel</button>
-                        <button type="submit" disabled={reserving || !reservationForm.start_date || !reservationForm.end_date || !reservationForm.notes} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-cyan-400 disabled:opacity-50">
-                            {reserving ? 'Submitting...' : 'Submit Request'}
                         </button>
                     </div>
                 </form>

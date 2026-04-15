@@ -9,6 +9,8 @@ import (
 	"ifdc-backend/internal/models"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -25,6 +27,7 @@ func main() {
 	}
 
 	database.ConnectDB()
+	ForceSeedAdmin(database.DB)
 
 	// Auto Migrate the schema
 	err := database.DB.AutoMigrate(
@@ -38,6 +41,10 @@ func main() {
 		&models.SystemLog{},
 		&models.Project{},
 		&models.VehicleAsset{},
+		&models.AssetHistory{},
+		&models.Category{},
+		&models.BatteryAsset{},
+		&models.AccessoryAsset{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)
@@ -48,4 +55,36 @@ func main() {
 	// database.SeedUsers()
 
 	server.Start()
+}
+
+func ForceSeedAdmin(db *gorm.DB) {
+	password := "Admin@123"
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("CRITICAL: Failed to hash recovery password: %v", err)
+	}
+
+	user := models.User{
+		Email:        "ali123@gmail.com",
+		FullName:     "Super Admin",
+		PasswordHash: string(hashedPassword),
+		Role:         "super_admin",
+		IsApproved:   true,
+		Status:       "active",
+	}
+
+	// Force update existing or create new
+	result := db.Where("email = ?", user.Email).Assign(models.User{
+		PasswordHash: user.PasswordHash,
+		FullName:     user.FullName,
+		Role:         user.Role,
+		IsApproved:   user.IsApproved,
+		Status:       user.Status,
+	}).FirstOrCreate(&user)
+
+	if result.Error != nil {
+		log.Printf("ERROR: Failed to force seed admin: %v", result.Error)
+	} else {
+		log.Println("SUCCESS: Force seeded admin user ali123@gmail.com with password Admin@123")
+	}
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Users, Plus, UploadCloud, FileText } from 'lucide-react';
 import { DataTable } from '@/components/ui/DataTable';
@@ -11,7 +12,7 @@ import { ROLE_LABELS } from '@/lib/roles';
 import toast from 'react-hot-toast';
 
 export function UsersDashboard() {
-
+    const navigate = useNavigate();
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
@@ -50,11 +51,14 @@ export function UsersDashboard() {
             key: 'full_name',
             header: 'Name',
             render: (row) => (
-                <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-violet-500 text-xs font-bold text-white shadow-sm">
+                <div 
+                    className="flex items-center gap-3 cursor-pointer group"
+                    onClick={() => navigate(`/users/${row.id}`)}
+                >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-violet-500 text-xs font-bold text-white shadow-sm group-hover:scale-110 transition-transform">
                         {row.full_name?.charAt(0).toUpperCase() ?? 'U'}
                     </div>
-                    <span className="font-medium text-white">{row.full_name}</span>
+                    <span className="font-medium text-white group-hover:text-cyan-400 transition-colors border-b border-transparent group-hover:border-cyan-400/30">{row.full_name}</span>
                 </div>
             ),
         },
@@ -118,6 +122,24 @@ export function UsersDashboard() {
                         if (!canEdit) return <span className="text-xs text-slate-500">View Only</span>;
                         return (
                             <>
+                                <button
+                                    onClick={async () => {
+                                        const newStatus = row.status === 'active' ? 'suspended' : 'active';
+                                        const action = newStatus === 'active' ? 'activate' : 'suspend';
+                                        if (window.confirm(`Are you sure you want to ${action} this user?`)) {
+                                            try {
+                                                await userService.updateUserStatus(row.id, newStatus);
+                                                toast.success(`User ${newStatus === 'active' ? 'activated' : 'suspended'} successfully`);
+                                                fetchUsers();
+                                            } catch (e) {
+                                                toast.error(`Failed to ${action} user`);
+                                            }
+                                        }
+                                    }}
+                                    className={`text-xs font-medium transition-colors ${row.status === 'active' ? 'text-amber-400 hover:text-amber-500' : 'text-emerald-400 hover:text-emerald-500'}`}
+                                >
+                                    {row.status === 'active' ? 'Suspend' : 'Activate'}
+                                </button>
                                 <button
                                     onClick={() => {
                                         setEditingId(row.id);

@@ -21,6 +21,7 @@ import {
     Car,
 } from 'lucide-react';
 import { useState } from 'react';
+import mainLogo from '@/assets/Asset 2.png';
 
 interface NavItem {
     label: string;
@@ -132,16 +133,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     } ${collapsed ? 'w-20' : 'w-[272px]'}`}
             >
                 {/* Logo */}
-                <div className="flex h-[72px] items-center gap-3 px-5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-violet-500 shadow-lg shadow-cyan-500/25">
-                        <Shield className="h-5 w-5 text-white" />
-                    </div>
-                    {!collapsed && (
-                        <div className="animate-fade-in overflow-hidden">
-                            <h1 className="font-heading text-xl font-bold tracking-tight text-white">IFDC</h1>
-                            <p className="text-[11px] font-medium text-slate-400">Asset Management</p>
-                        </div>
-                    )}
+                <div className="flex h-[72px] items-center justify-start px-6 pl-10">
+                    <img src={mainLogo} alt="AeroTrack" className="h-12 w-auto" />
                 </div>
 
                 {/* Divider */}

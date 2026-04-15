@@ -1,12 +1,13 @@
 import { apiClient } from '@/lib/api';
-import type { OfficeAsset, PaginatedResponse, AssetStatus, OfficeAssetCategory } from '@/types';
+import type { OfficeAsset, PaginatedResponse } from '@/types';
 
 export interface CreateOfficeAssetData {
     name: string;
-    category: OfficeAssetCategory;
+    category: string;
     serial_number: string;
-    status: AssetStatus;
+    status: string;
     department_id: string | null;
+    user_id: string | null;
     assigned_to: string | null;
     purchase_date: string | null;
     warranty_expiry: string | null;
@@ -40,5 +41,9 @@ export const officeService = {
 
     deleteAsset: async (id: string): Promise<void> => {
         await apiClient.delete(`/office/assets/${id}`);
+    },
+    getCategories: async (): Promise<any[]> => {
+        const response = await apiClient.get<any[]>('/office/categories');
+        return response.data;
     },
 };

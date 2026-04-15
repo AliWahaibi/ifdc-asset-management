@@ -44,6 +44,7 @@ export function App() {
                     <Route path="/calendar" element={<TimelineCalendar />} />
                     <Route path="/ai-assistant" element={<AIAssistant />} />
                     <Route path="/profile" element={<UserProfile />} />
+                    <Route path="/users/:id" element={<UserProfile />} />
                     <Route path="/admission" element={<ProjectAdmission />} />
                     <Route path="/admissions-list" element={<ProjectAdmissionsList />} />
 

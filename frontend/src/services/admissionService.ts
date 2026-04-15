@@ -41,8 +41,8 @@ export const admissionService = {
         return response.data;
     },
 
-    updateAdmissionStatus: async (id: string, status: 'approved' | 'rejected'): Promise<any> => {
-        const response = await apiClient.patch(`/admissions/${id}/status`, { status });
+    updateAdmissionStatus: async (id: string, status: 'approved' | 'rejected', rejectionReason?: string): Promise<any> => {
+        const response = await apiClient.patch(`/admissions/${id}/status`, { status, rejection_reason: rejectionReason });
         return response.data;
     }
-};
+}

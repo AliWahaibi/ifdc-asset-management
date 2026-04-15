@@ -5,6 +5,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api';
 import { useDebounce } from '@/hooks/useDebounce';
+import topbarLogo from '@/assets/Asset 3.png';
 
 interface SearchResult {
     id: string;
@@ -94,6 +95,9 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                 >
                     <Menu className="h-5 w-5" />
                 </button>
+
+                {/* Logo (Mobile/Small screens or variant) */}
+                <img src={topbarLogo} alt="IFDC" className="h-7 w-auto mr-6 hidden md:block opacity-80 hover:opacity-100 transition-opacity" />
 
                 {/* Search */}
                 <div className="relative hidden w-full max-w-lg md:block" ref={searchRef}>
