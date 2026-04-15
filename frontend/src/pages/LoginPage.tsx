@@ -44,7 +44,13 @@ export function LoginPage() {
             <div className="relative z-10 w-full max-w-md animate-fade-in">
                 {/* Logo */}
                 <div className="mb-12 text-center flex flex-col items-center">
-                    <img src={loginLogo} alt="AeroTrack" className="h-24 w-auto drop-shadow-2xl" />
+                    <img 
+                        src="/logo.png" 
+                        alt="AeroTrack" 
+                        className="h-24 w-auto drop-shadow-2xl" 
+                        fetchPriority="high"
+                        loading="eager"
+                    />
                 </div>
 
                 {/* Login Card */}
