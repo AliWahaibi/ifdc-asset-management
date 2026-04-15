@@ -45,6 +45,8 @@ func main() {
 		&models.Category{},
 		&models.BatteryAsset{},
 		&models.AccessoryAsset{},
+		&models.Admission{},
+		&models.AdmissionAsset{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)

@@ -5,16 +5,13 @@ import { apiClient } from '@/lib/api';
 
 interface AuthState {
     user: User | null;
-    accessToken: string | null;
-    refreshToken: string | null;
     isAuthenticated: boolean;
     isLoading: boolean;
 
     // Actions
     login: (email: string, password: string) => Promise<void>;
     logout: () => void;
-    refreshAccessToken: () => Promise<string | null>;
-    setTokens: (accessToken: string, refreshToken: string) => void;
+    refreshAccessToken: () => Promise<void>;
     setUser: (user: User) => void;
 }
 
@@ -22,8 +19,6 @@ export const useAuthStore = create<AuthState>()(
     persist(
         (set, get) => ({
             user: null,
-            accessToken: null,
-            refreshToken: null,
             isAuthenticated: false,
             isLoading: false,
 
@@ -31,11 +26,9 @@ export const useAuthStore = create<AuthState>()(
                 set({ isLoading: true });
                 try {
                     const response = await apiClient.post('/auth/login', { email, password });
-                    const { access_token, refresh_token, user } = response.data;
+                    const { user } = response.data;
                     set({
                         user,
-                        accessToken: access_token,
-                        refreshToken: refresh_token,
                         isAuthenticated: true,
                         isLoading: false,
                     });
@@ -48,33 +41,20 @@ export const useAuthStore = create<AuthState>()(
             logout: () => {
                 set({
                     user: null,
-                    accessToken: null,
-                    refreshToken: null,
                     isAuthenticated: false,
                 });
+                // Note: The actual cookie clearing should happen on the backend or via document.cookie if not HttpOnly
+                // But since we use HttpOnly, the backend must clear it on a logout endpoint.
+                // For now, we clear the local state.
             },
 
             refreshAccessToken: async () => {
-                const { refreshToken } = get();
-                if (!refreshToken) {
-                    get().logout();
-                    return null;
-                }
                 try {
-                    const response = await apiClient.post('/auth/refresh', {
-                        refresh_token: refreshToken,
-                    });
-                    const { access_token } = response.data;
-                    set({ accessToken: access_token });
-                    return access_token;
+                    await apiClient.post('/auth/refresh');
+                    // Cookie is updated automatically by the browser
                 } catch {
                     get().logout();
-                    return null;
                 }
-            },
-
-            setTokens: (accessToken: string, refreshToken: string) => {
-                set({ accessToken, refreshToken, isAuthenticated: true });
             },
 
             setUser: (user: User) => {
@@ -85,8 +65,6 @@ export const useAuthStore = create<AuthState>()(
             name: 'ifdc-auth',
             partialize: (state) => ({
                 user: state.user,
-                accessToken: state.accessToken,
-                refreshToken: state.refreshToken,
                 isAuthenticated: state.isAuthenticated,
             }),
         }

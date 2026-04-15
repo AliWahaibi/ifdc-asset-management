@@ -10,7 +10,25 @@ import (
 	"ifdc-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/microcosm-cc/bluemonday"
 )
+ 
+// GetUniqueAssetTypes retrieves unique classification strings for frontend suggestions
+func GetUniqueAssetTypes(c *gin.Context) {
+	var droneModels []string
+	var accessoryTypes []string
+	var rndTypes []string
+
+	database.DB.Model(&models.DroneAsset{}).Distinct("model").Pluck("model", &droneModels)
+	database.DB.Model(&models.AccessoryAsset{}).Distinct("type").Pluck("type", &accessoryTypes)
+	database.DB.Model(&models.RndAsset{}).Distinct("asset_type").Pluck("asset_type", &rndTypes)
+
+	c.JSON(http.StatusOK, gin.H{
+		"drone_models":    droneModels,
+		"accessory_types": accessoryTypes,
+		"rnd_asset_types": rndTypes,
+	})
+}
 
 // GetDrones retrieves paginated drones
 func GetDrones(c *gin.Context) {
@@ -198,6 +216,12 @@ func CreateDrone(c *gin.Context) {
 		drone.Status = input.Status
 	}
 
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	drone.Name = p.Sanitize(drone.Name)
+	drone.Model = p.Sanitize(drone.Model)
+	drone.SerialNumber = p.Sanitize(drone.SerialNumber)
+
 	if err := database.DB.Create(&drone).Error; err != nil {
 		if database.IsUniqueConstraintError(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "A drone with this serial number already exists"})
@@ -257,6 +281,13 @@ func CreateOfficeAsset(c *gin.Context) {
 		asset.Status = input.Status
 	}
 
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	asset.Name = p.Sanitize(asset.Name)
+	asset.Category = p.Sanitize(asset.Category)
+	asset.SerialNumber = p.Sanitize(asset.SerialNumber)
+	asset.Notes = p.Sanitize(asset.Notes)
+
 	if err := database.DB.Create(&asset).Error; err != nil {
 		if database.IsUniqueConstraintError(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "An office asset with this serial number already exists"})
@@ -273,9 +304,9 @@ func CreateOfficeAsset(c *gin.Context) {
 func CreateRndAsset(c *gin.Context) {
 	var input struct {
 		Name           string                 `json:"name" binding:"required,min=2,max=255"`
-		AssetType      string                 `json:"asset_type" binding:"required,oneof=vtol experimental prototype component"`
+		AssetType      string                 `json:"asset_type" binding:"required"`
 		SerialNumber   string                 `json:"serial_number" binding:"required,min=2,max=100"`
-		Status         string                 `json:"status" binding:"required,oneof=available in_use maintenance reserved retired"`
+		Status         string                 `json:"status" binding:"required"`
 		DepartmentID   *string                `json:"department_id"`
 		Specifications map[string]interface{} `json:"specifications"`
 		IsClassified   bool                   `json:"is_classified"`
@@ -300,6 +331,13 @@ func CreateRndAsset(c *gin.Context) {
 	// Handle JSONB storage
 	specBytes, _ := json.Marshal(input.Specifications)
 	asset.Specifications = string(specBytes)
+
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	asset.Name = p.Sanitize(asset.Name)
+	asset.AssetType = p.Sanitize(asset.AssetType)
+	asset.SerialNumber = p.Sanitize(asset.SerialNumber)
+	asset.Notes = p.Sanitize(asset.Notes)
 
 	if err := database.DB.Create(&asset).Error; err != nil {
 		if database.IsUniqueConstraintError(err) {
@@ -463,24 +501,74 @@ func ResolveMaintenance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Maintenance resolved successfully", "drone": drone})
 }
 
-// GetBatteries retrieves all batteries
+// GetBatteries retrieves all batteries with pagination and search
 func GetBatteries(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
 	var batteries []models.BatteryAsset
-	if err := database.DB.Find(&batteries).Error; err != nil {
+	var total int64
+
+	query := database.DB.Model(&models.BatteryAsset{})
+	if search != "" {
+		query = query.Where("name ILIKE ? OR serial_number ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count batteries"})
+		return
+	}
+
+	if err := query.Offset(offset).Limit(limit).Find(&batteries).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch batteries"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": batteries})
+
+	c.JSON(http.StatusOK, gin.H{"data": batteries, "total": total, "page": page, "limit": limit})
 }
 
-// GetAccessories retrieves all accessories
+// GetAccessories retrieves all accessories with pagination and search
 func GetAccessories(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
 	var accessories []models.AccessoryAsset
-	if err := database.DB.Find(&accessories).Error; err != nil {
+	var total int64
+
+	query := database.DB.Model(&models.AccessoryAsset{})
+	if search != "" {
+		query = query.Where("name ILIKE ? OR serial_number ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count accessories"})
+		return
+	}
+
+	if err := query.Offset(offset).Limit(limit).Find(&accessories).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch accessories"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": accessories})
+
+	c.JSON(http.StatusOK, gin.H{"data": accessories, "total": total, "page": page, "limit": limit})
 }
 
 // CreateBattery godoc
@@ -505,6 +593,12 @@ func CreateBattery(c *gin.Context) {
 		CycleCount:   input.CycleCount,
 		Status:       "Available",
 	}
+
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	battery.Name = p.Sanitize(battery.Name)
+	battery.Model = p.Sanitize(battery.Model)
+	battery.SerialNumber = p.Sanitize(battery.SerialNumber)
 
 	if err := database.DB.Create(&battery).Error; err != nil {
 		if database.IsUniqueConstraintError(err) {
@@ -539,6 +633,12 @@ func CreateAccessory(c *gin.Context) {
 		Status:       "Available",
 	}
 
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	accessory.Name = p.Sanitize(accessory.Name)
+	accessory.Type = p.Sanitize(accessory.Type)
+	accessory.SerialNumber = p.Sanitize(accessory.SerialNumber)
+
 	if err := database.DB.Create(&accessory).Error; err != nil {
 		if database.IsUniqueConstraintError(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "An accessory with this serial number already exists"})
@@ -549,4 +649,88 @@ func CreateAccessory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, accessory)
+}
+
+// GetOperationsAssetsUnified aggregates all operation-related assets into one list
+func GetOperationsAssetsUnified(c *gin.Context) {
+	search := c.Query("search")
+
+	// We'll perform a simplified fetch here since we're merging multiple tables
+	// For production, a view or a more complex query might be better, but for this refactor, 
+	// we'll fetch then merge.
+
+	var drones []models.DroneAsset
+	var batteries []models.BatteryAsset
+	var accessories []models.AccessoryAsset
+
+	// Search logic for all
+	droneQuery := database.DB.Model(&models.DroneAsset{})
+	batteryQuery := database.DB.Model(&models.BatteryAsset{})
+	accessoryQuery := database.DB.Model(&models.AccessoryAsset{})
+
+	if search != "" {
+		s := "%" + search + "%"
+		droneQuery = droneQuery.Where("name ILIKE ? OR serial_number ILIKE ?", s, s)
+		batteryQuery = batteryQuery.Where("name ILIKE ? OR serial_number ILIKE ?", s, s)
+		accessoryQuery = accessoryQuery.Where("name ILIKE ? OR serial_number ILIKE ?", s, s)
+	}
+
+	droneQuery.Find(&drones)
+	batteryQuery.Find(&batteries)
+	accessoryQuery.Find(&accessories)
+
+	type UnifiedAsset struct {
+		ID               string  `json:"id"`
+		Name             string  `json:"name"`
+		Model            string  `json:"model,omitempty"`
+		Type             string  `json:"type"` 
+		SerialNumber     string  `json:"serial_number"`
+		Status           string  `json:"status"`
+		TotalFlightHours float64 `json:"total_flight_hours,omitempty"`
+		CycleCount       int     `json:"cycle_count,omitempty"`
+		AccessoryType    string  `json:"accessory_type,omitempty"`
+		UpdatedAt        string  `json:"updated_at"`
+	}
+
+	var results []UnifiedAsset
+
+	for _, d := range drones {
+		results = append(results, UnifiedAsset{
+			ID:               d.ID,
+			Name:             d.Name,
+			Model:            d.Model,
+			Type:             "drone",
+			SerialNumber:     d.SerialNumber,
+			Status:           d.Status,
+			TotalFlightHours: d.TotalFlightHours,
+			UpdatedAt:        d.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	for _, b := range batteries {
+		results = append(results, UnifiedAsset{
+			ID:           b.ID,
+			Name:         b.Name,
+			Model:        b.Model,
+			Type:         "battery",
+			SerialNumber: b.SerialNumber,
+			Status:       b.Status,
+			CycleCount:   b.CycleCount,
+			UpdatedAt:    b.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	for _, a := range accessories {
+		results = append(results, UnifiedAsset{
+			ID:            a.ID,
+			Name:          a.Name,
+			AccessoryType: a.Type,
+			Type:          "accessory",
+			SerialNumber:  a.SerialNumber,
+			Status:        a.Status,
+			UpdatedAt:     a.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": results, "total": len(results)})
 }

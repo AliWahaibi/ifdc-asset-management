@@ -3,13 +3,13 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"ifdc-backend/internal/database"
 	"ifdc-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/microcosm-cc/bluemonday"
 )
 
 type AssetRequest struct {
@@ -19,6 +19,7 @@ type AssetRequest struct {
 
 type AdmissionRequest struct {
 	ProjectName     string         `json:"project_name" binding:"required"`
+	Purpose         string         `json:"purpose"`
 	StartDate       string         `json:"start_date" binding:"required"`
 	EndDate         string         `json:"end_date" binding:"required"`
 	RequestedAssets []AssetRequest `json:"requested_assets" binding:"required"`
@@ -36,14 +37,12 @@ func CreateAdmission(c *gin.Context) {
 		return
 	}
 
-	// Extract user_id securely from Gin Context
 	userID := c.GetString("userID")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: missing user ID"})
 		return
 	}
 
-	// Parse dates
 	start, err := time.Parse(time.RFC3339, req.StartDate)
 	if err != nil {
 		start, _ = time.Parse(time.DateTime, req.StartDate)
@@ -53,7 +52,6 @@ func CreateAdmission(c *gin.Context) {
 		end, _ = time.Parse(time.DateTime, req.EndDate)
 	}
 
-	// Start Transaction
 	tx := database.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -66,123 +64,121 @@ func CreateAdmission(c *gin.Context) {
 		return
 	}
 
-	// 1. Create Project
-	project := models.Project{
-		Name:      req.ProjectName,
-		StartDate: start,
-		EndDate:   end,
-		Status:    "pending_approval",
-		UserID:    userID,
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	req.ProjectName = p.Sanitize(req.ProjectName)
+	req.Purpose = p.Sanitize(req.Purpose)
+
+	// 1. Create Parent Admission
+	admission := models.Admission{
+		ProjectName: req.ProjectName,
+		Purpose:     req.Purpose,
+		StartDate:   start,
+		EndDate:     end,
+		Status:      "pending",
+		UserID:      userID,
 	}
 
-	if err := tx.Create(&project).Error; err != nil {
+	if err := tx.Create(&admission).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create project"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create admission parent"})
 		return
 	}
 
-	// 2. Create Reservations for each asset
+	// 2. Create Child Admission Assets
 	for _, asset := range req.RequestedAssets {
-		// Check for overlaps (within transaction)
+		// Validation logic... (keep existing availability check but adapt to transaction)
 		var count int64
 		overlapQuery := `
-			SELECT count(*) FROM reservations 
-			WHERE asset_id = ? AND status IN ('approved', 'pending') 
-			AND (start_date <= ? AND end_date >= ?)
+			SELECT count(*) FROM admission_assets aa
+			JOIN admissions a ON aa.admission_id = a.id
+			WHERE aa.asset_id = ? AND a.status IN ('approved', 'pending') 
+			AND (a.start_date <= ? AND a.end_date >= ?)
+			AND a.deleted_at IS NULL AND aa.deleted_at IS NULL
 		`
 		if err := tx.Raw(overlapQuery, asset.AssetID, end, start).Scan(&count).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate reservation availability"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate availability"})
 			return
 		}
 
 		if count > 0 {
 			tx.Rollback()
-			c.JSON(http.StatusConflict, gin.H{"error": "One or more assets are already reserved for these dates."})
+			c.JSON(http.StatusConflict, gin.H{"error": "One or more assets are already requested or reserved for these dates."})
 			return
 		}
 
-		reservation := models.Reservation{
-			UserID:    userID,
-			AssetType: asset.AssetType,
-			AssetID:   asset.AssetID,
-			Status:    "pending",
-			StartDate: start,
-			EndDate:   end,
-			Notes:     "Project Admission Request",
-			ProjectID: &project.ID,
+		admAsset := models.AdmissionAsset{
+			AdmissionID: admission.ID,
+			AssetID:     asset.AssetID,
+			AssetType:   asset.AssetType,
+			Status:      "pending",
 		}
 
-		if err := tx.Create(&reservation).Error; err != nil {
+		if err := tx.Create(&admAsset).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reservation for asset: " + asset.AssetID})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to link asset: " + asset.AssetID})
 			return
 		}
 	}
 
-	// Commit Transaction
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit admission"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Project admission created successfully",
-		"project": project,
+		"message":   "Admission request created successfully",
+		"admission": admission,
 	})
 }
 
 func GetAdmissions(c *gin.Context) {
-	var projects []models.Project
-	if err := database.DB.Preload("User").Preload("Reservations").Order("created_at desc").Find(&projects).Error; err != nil {
+	status := c.Query("status")
+	search := c.Query("search")
+	var admissions []models.Admission
+	
+	query := database.DB.Preload("User").Preload("RequestedAssets").Order("created_at desc")
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if search != "" {
+		query = query.Where("project_name ILIKE ? OR purpose ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if err := query.Find(&admissions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch admissions"})
 		return
 	}
 
-	// Populate AssetName for each reservation manually since it's a polymorphic relation not fully handled by GORM preload for the Name field
-	for i := range projects {
-		for j := range projects[i].Reservations {
-			r := &projects[i].Reservations[j]
+	for i := range admissions {
+		for j := range admissions[i].RequestedAssets {
+			r := &admissions[i].RequestedAssets[j]
 			var name string
-			var err error
-
 			switch r.AssetType {
 			case "vehicle":
 				var asset models.VehicleAsset
-				err = database.DB.Select("name").First(&asset, "id = ?", r.AssetID).Error
-				if err == nil {
-					name = asset.Name
-				}
+				database.DB.Select("name").First(&asset, "id = ?", r.AssetID)
+				name = asset.Name
 			case "drone":
 				var asset models.DroneAsset
-				err = database.DB.Select("name").First(&asset, "id = ?", r.AssetID).Error
-				if err == nil {
-					name = asset.Name
-				}
+				database.DB.Select("name").First(&asset, "id = ?", r.AssetID)
+				name = asset.Name
 			case "office":
 				var asset models.OfficeAsset
-				err = database.DB.Select("name").First(&asset, "id = ?", r.AssetID).Error
-				if err == nil {
-					name = asset.Name
-				}
+				database.DB.Select("name").First(&asset, "id = ?", r.AssetID)
+				name = asset.Name
 			case "rnd":
 				var asset models.RndAsset
-				err = database.DB.Select("name").First(&asset, "id = ?", r.AssetID).Error
-				if err == nil {
-					name = asset.Name
-				}
+				database.DB.Select("name").First(&asset, "id = ?", r.AssetID)
+				name = asset.Name
 			}
-			
-			if name != "" {
-				r.AssetName = name
-			} else {
-				r.AssetName = "Unknown Asset"
-			}
+			r.AssetName = name
 		}
 	}
 
-	c.JSON(http.StatusOK, projects)
+	c.JSON(http.StatusOK, admissions)
 }
 
 func UpdateAdmissionStatus(c *gin.Context) {
@@ -194,93 +190,54 @@ func UpdateAdmissionStatus(c *gin.Context) {
 		return
 	}
 
-	adminID := c.GetString("userID")
-	if adminID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: missing user ID"})
-		return
-	}
-
 	tx := database.DB.Begin()
-	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
-		return
-	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	var project models.Project
-	if err := tx.First(&project, "id = ?", id).Error; err != nil {
+	var admission models.Admission
+	if err := tx.Preload("RequestedAssets").First(&admission, "id = ?", id).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Admission not found"})
 		return
 	}
 
-	project.Status = req.Status
+	admission.Status = req.Status
 	if req.Status == "rejected" {
-		project.RejectionReason = req.RejectionReason
+		admission.RejectionReason = req.RejectionReason
 	}
-	if err := tx.Save(&project).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update project status"})
-		return
-	}
+	tx.Save(&admission)
 
-	targetReservationStatus := "rejected"
+	// Update child assets
+	tx.Model(&models.AdmissionAsset{}).Where("admission_id = ?", admission.ID).Update("status", req.Status)
+
+	// If approved, create entries in AssetHistory and Reservation (optional)
 	if req.Status == "approved" {
-		targetReservationStatus = "approved"
-	}
-
-	if err := tx.Model(&models.Reservation{}).Where("project_id = ?", project.ID).Update("status", targetReservationStatus).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update project reservations"})
-		return
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
-		return
-	}
-
-	// Log Asset History if approved
-	if req.Status == "approved" {
-		var reservations []models.Reservation
-		database.DB.Where("project_id = ?", project.ID).Find(&reservations)
-		for _, r := range reservations {
+		for _, ra := range admission.RequestedAssets {
 			history := models.AssetHistory{
-				AssetType: r.AssetType,
-				AssetID:   r.AssetID,
-				ProjectID: &project.ID,
+				AssetType: ra.AssetType,
+				AssetID:   ra.AssetID,
 				Action:    "checkout",
-				Notes:     fmt.Sprintf("Asset assigned to project: %s", project.Name),
+				Notes:     fmt.Sprintf("Approved via admission: %s", admission.ProjectName),
 			}
-			database.DB.Create(&history)
+			tx.Create(&history)
 
-			// Update Asset Status to in_use (optional, depends on logic elsewhere)
+			// Also create a reservation entry to block the timeline
+			res := models.Reservation{
+				UserID:    admission.UserID,
+				AssetType: ra.AssetType,
+				AssetID:   ra.AssetID,
+				StartDate: admission.StartDate,
+				EndDate:   admission.EndDate,
+				Status:    "approved",
+				Notes:     fmt.Sprintf("Admission: %s", admission.ProjectName),
+			}
+			tx.Create(&res)
 		}
 	}
 
-	var admin models.User
-	adminName := "Unknown Admin"
-	if err := database.DB.First(&admin, "id = ?", adminID).Error; err == nil {
-		adminName = admin.FullName
-	}
-
-	if strings.ToLower(req.Status) == "approved" {
-		details := fmt.Sprintf("Admin %s approved project %s and reserved its assets.", adminName, project.Name)
-		database.CreateLog("INFO", "Project Approved", details, &adminID)
-	} else {
-		details := fmt.Sprintf("Admin %s rejected project %s.", adminName, project.Name)
-		database.CreateLog("WARNING", "Project Rejected", details, &adminID)
-	}
+	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Project status updated successfully",
-		"project": project,
+		"message":   "Admission updated",
+		"admission": admission,
 	})
 }
 

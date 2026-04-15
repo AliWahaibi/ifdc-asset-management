@@ -7,10 +7,10 @@ import type { Column } from '@/components/ui/DataTable';
 import type { RndAsset } from '@/types';
 
 import { rndService, type CreateRndAssetData } from '@/services/rndService';
-import { reservationService } from '@/services/reservationService';
 import { useAuthStore } from '@/stores/authStore';
 import { hasAnyRole } from '@/lib/roles';
 import toast from 'react-hot-toast';
+import CreatableSelect from 'react-select/creatable';
 
 const TYPE_STYLES: Record<string, { label: string; color: string }> = {
     vtol: { label: 'V-TOL', color: 'bg-cyan-500/10 text-cyan-400' },
@@ -21,41 +21,11 @@ const TYPE_STYLES: Record<string, { label: string; color: string }> = {
 
 export function RndDashboard() {
     const { user } = useAuthStore();
-    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'admin']) : false;
+    const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'manager']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const [reservationModalOpen, setReservationModalOpen] = useState(false);
-    const [selectedAsset, setSelectedAsset] = useState<any>(null);
-    const [reservationForm, setReservationForm] = useState({ start_date: '', end_date: '', notes: '' });
-    const [reserving, setReserving] = useState(false);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
 
-    const handleReserveClick = (asset: any) => {
-        setSelectedAsset(asset);
-        setReservationForm({ start_date: '', end_date: '', notes: '' });
-        setReservationModalOpen(true);
-    };
-
-    const handleReservationSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedAsset) return;
-        setReserving(true);
-        try {
-            await reservationService.createReservation({
-                asset_type: 'rnd',
-                asset_id: selectedAsset.id,
-                start_date: new Date(reservationForm.start_date).toISOString(),
-                end_date: new Date(reservationForm.end_date).toISOString(),
-                notes: reservationForm.notes,
-            });
-            toast.success(`Reservation requested for ${selectedAsset.name}`);
-            setReservationModalOpen(false);
-            fetchAssets();
-        } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to request reservation');
-        } finally {
-            setReserving(false);
-        }
-    };
 
     const columns: Column<RndAsset>[] = [
         {
@@ -115,14 +85,6 @@ export function RndDashboard() {
             sortable: false,
             render: (row) => (
                 <div className="flex items-center gap-2">
-                    <button
-                        disabled={row.status !== 'available'}
-                        onClick={() => handleReserveClick(row)}
-                        className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-white/5 disabled:hover:text-slate-300"
-                    >
-                        <CalendarCheck className="h-3.5 w-3.5" />
-                        Reserve
-                    </button>
                     {canEdit && (
                         <>
                             <button
@@ -188,9 +150,52 @@ export function RndDashboard() {
         }
     };
 
+    const fetchSuggestions = async () => {
+        try {
+            const data = await rndService.getUniqueTypes();
+            setSuggestions(data.rnd_asset_types);
+        } catch (e) { }
+    };
+
     useEffect(() => {
         fetchAssets();
+        fetchSuggestions();
     }, []);
+
+    const customSelectStyles = {
+        control: (base: any) => ({
+            ...base,
+            backgroundColor: '#1e293b',
+            borderColor: '#334155',
+            borderRadius: '0.75rem',
+            padding: '2px',
+            color: 'white',
+            '&:hover': {
+                borderColor: '#06b6d4',
+            }
+        }),
+        menu: (base: any) => ({
+            ...base,
+            backgroundColor: '#1e293b',
+            border: '1px solid #334155',
+        }),
+        option: (base: any, state: any) => ({
+            ...base,
+            backgroundColor: state.isFocused ? '#334155' : 'transparent',
+            color: 'white',
+            '&:active': {
+                backgroundColor: '#475569',
+            }
+        }),
+        singleValue: (base: any) => ({
+            ...base,
+            color: 'white',
+        }),
+        input: (base: any) => ({
+            ...base,
+            color: 'white',
+        })
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -226,7 +231,7 @@ export function RndDashboard() {
                     </h1>
                     <p className="mt-3 text-lg text-slate-400">V-TOL equipment, experimental prototypes, and R&D components.</p>
                 </div>
-                {user && hasAnyRole(user.role, ['super_admin', 'admin', 'manager']) && (
+                {user && hasAnyRole(user.role, ['super_admin', 'manager']) && (
                     <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 active:scale-[0.97]">
                         <Plus className="h-4 w-4" /> Add R&D Asset
                     </button>
@@ -261,7 +266,7 @@ export function RndDashboard() {
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
                 </div>
             ) : (
-                <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search R&D assets..." />
+                <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search equipment by name or serial..." />
             )}
 
             <Modal isOpen={modalOpen} onClose={() => {
@@ -272,7 +277,17 @@ export function RndDashboard() {
                 <form className="space-y-5" onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Asset Name</label><input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g. V-TOL Gamma" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
-                        <div><label className="mb-2 block text-sm font-medium text-slate-200">Type</label><select value={formData.asset_type} onChange={e => setFormData({ ...formData, asset_type: e.target.value as any })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500"><option value="vtol">V-TOL</option><option value="experimental">Experimental</option><option value="prototype">Prototype</option><option value="component">Component</option></select></div>
+                        <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Type</label>
+                            <CreatableSelect
+                                isClearable
+                                value={formData.asset_type ? { label: formData.asset_type.toUpperCase(), value: formData.asset_type } : null}
+                                options={suggestions.map(t => ({ label: t.toUpperCase(), value: t }))}
+                                onChange={(opt: any) => setFormData({ ...formData, asset_type: opt ? opt.value : '' })}
+                                styles={customSelectStyles}
+                                placeholder="Select or type new..."
+                            />
+                        </div>
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Serial Number</label><input required type="text" value={formData.serial_number} onChange={e => setFormData({ ...formData, serial_number: e.target.value })} placeholder="XX-XX-XXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         <div className="flex items-center gap-3 pt-8"><input type="checkbox" id="classified" checked={formData.is_classified} onChange={e => setFormData({ ...formData, is_classified: e.target.checked })} className="h-4 w-4 rounded border-slate-600 bg-slate-800" /><label htmlFor="classified" className="text-sm text-slate-300">Mark as Classified</label></div>
                         <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-200">Notes / Details</label><input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Phase testing details..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
@@ -286,31 +301,6 @@ export function RndDashboard() {
                 </form>
             </Modal>
 
-            {/* Reservation Modal */}
-            <Modal isOpen={reservationModalOpen} onClose={() => setReservationModalOpen(false)} title={`Request Reservation: ${selectedAsset?.name}`}>
-                <form onSubmit={handleReservationSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-300">Start Date</label>
-                            <input required type="datetime-local" value={reservationForm.start_date} onChange={e => setReservationForm({ ...reservationForm, start_date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-300">End Date</label>
-                            <input required type="datetime-local" value={reservationForm.end_date} onChange={e => setReservationForm({ ...reservationForm, end_date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-300">Reason / Notes</label>
-                        <textarea required value={reservationForm.notes} onChange={e => setReservationForm({ ...reservationForm, notes: e.target.value })} className="h-24 w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" placeholder="Please provide a valid reason..."></textarea>
-                    </div>
-                    <div className="mt-6 flex justify-end gap-3">
-                        <button type="button" onClick={() => setReservationModalOpen(false)} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors">Cancel</button>
-                        <button type="submit" disabled={reserving || !reservationForm.start_date || !reservationForm.end_date || !reservationForm.notes} className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-cyan-400 disabled:opacity-50">
-                            {reserving ? 'Submitting...' : 'Submit Request'}
-                        </button>
-                    </div>
-                </form>
-            </Modal>
         </div>
     );
 }

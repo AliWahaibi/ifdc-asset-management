@@ -249,7 +249,7 @@ export function OfficeDashboard() {
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
                 </div>
             ) : (
-                <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search by name, serial, or category..." />
+                <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search office assets by name or serial..." />
             )}
 
             <Modal isOpen={modalOpen} onClose={() => {

@@ -17,12 +17,18 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// 1. Serve static files from the uploads directory securely
-	// This allows the frontend to load the uploaded CVs and ID cards via URL
-	r.Static("/uploads", "./uploads")
+	// 1. Serve static files with secure headers (Content-Disposition: attachment)
+	r.GET("/uploads/*filepath", func(c *gin.Context) {
+		path := "./uploads" + c.Param("filepath")
+		c.Header("Content-Disposition", "attachment")
+		c.File(path)
+	})
 
 	// Apply CORS Middleware globally
 	r.Use(middleware.CORSMiddleware())
+	
+	// Apply Body size limit (2MB) globally to prevent DoS
+	r.Use(middleware.BodyLimiter(2 << 20))
 
 	// Global default rate limiting (e.g. 100 req per minute)
 	r.Use(middleware.RateLimiter(rate.Every(time.Minute/100), 100))
@@ -34,6 +40,7 @@ func SetupRouter() *gin.Engine {
 
 		// Availability Check
 		api.GET("/assets/availability", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.CheckAssetAvailability)
+		api.GET("/assets/unique-types", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetUniqueAssetTypes)
 
 		// Admissions
 		api.POST("/admissions", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.CreateAdmission)
@@ -77,10 +84,10 @@ func SetupRouter() *gin.Engine {
 			reservations.PATCH("/:id/status", handlers.UpdateReservationStatus)
 		}
 
-		// Operations group
 		operations := api.Group("/operations")
 		operations.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
+			operations.GET("/assets", handlers.GetOperationsAssetsUnified)
 			operations.GET("/drones", handlers.GetDrones)
 			operations.GET("/batteries", handlers.GetBatteries)
 			operations.GET("/accessories", handlers.GetAccessories)

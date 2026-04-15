@@ -11,19 +11,18 @@ import type { AssetStatus, MaintenanceStatus, ReservationStatus } from '@/types'
 
 type BadgeStatus = AssetStatus | MaintenanceStatus | ReservationStatus;
 
-interface Reservation {
+interface AdmissionAsset {
     id: string;
     asset_type: string;
     asset_id: string;
     asset_name: string;
-    start_date: string;
-    end_date: string;
     status: string;
 }
 
-interface Project {
+interface Admission {
     id: string;
-    name: string;
+    project_name: string;
+    purpose?: string;
     start_date: string;
     end_date: string;
     status: string;
@@ -31,22 +30,22 @@ interface Project {
         full_name: string;
         email: string;
     };
-    requested_assets: Reservation[];
+    requested_assets: AdmissionAsset[];
     rejection_reason?: string;
 }
 
 export function ProjectAdmissionsList() {
-    const [projects, setProjects] = useState<Project[]>([]);
+    const [admissions, setAdmissions] = useState<Admission[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+    const [selectedAdmission, setSelectedAdmission] = useState<Admission | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
-    const fetchProjects = async () => {
+    const fetchAdmissions = async (search?: string) => {
         setLoading(true);
         try {
-            const data = await admissionService.getAdmissions();
-            setProjects(data);
+            const data = await admissionService.getAdmissions(undefined, search);
+            setAdmissions(data);
         } catch (error) {
             toast.error('Failed to fetch project admissions');
         } finally {
@@ -55,8 +54,11 @@ export function ProjectAdmissionsList() {
     };
 
     useEffect(() => {
-        fetchProjects();
-    }, []);
+        const timeout = setTimeout(() => {
+            fetchAdmissions(searchTerm);
+        }, 300);
+        return () => clearTimeout(timeout);
+    }, [searchTerm]);
 
     const handleStatusUpdate = async (id: string, status: 'approved' | 'rejected') => {
         let reason = '';
@@ -65,30 +67,33 @@ export function ProjectAdmissionsList() {
         }
         try {
             await admissionService.updateAdmissionStatus(id, status, reason);
-            toast.success(`Project ${status} successfully`);
-            fetchProjects();
+            toast.success(`Admission ${status} successfully`);
+            fetchAdmissions();
         } catch (error) {
-            toast.error(`Failed to ${status} project`);
+            toast.error(`Failed to ${status} admission`);
         }
     };
 
-    const openDetailsModal = (project: Project) => {
-        setSelectedProject(project);
+    const openDetailsModal = (admission: Admission) => {
+        setSelectedAdmission(admission);
         setIsDetailsModalOpen(true);
     };
 
-    const columns: Column<Project>[] = [
+    const columns: Column<Admission>[] = [
         {
-            key: 'name',
+            key: 'project_name',
             header: 'Project Name',
-            render: (row: Project) => (
-                <div className="font-medium text-white">{row.name}</div>
+            render: (row: Admission) => (
+                <div>
+                   <div className="font-medium text-white">{row.project_name}</div>
+                   {row.purpose && <div className="text-xs text-slate-500 italic mt-0.5 line-clamp-1">{row.purpose}</div>}
+                </div>
             ),
         },
         {
             key: 'user',
             header: 'Requester',
-            render: (row: Project) => (
+            render: (row: Admission) => (
                 <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-slate-400" />
                     <span className="text-slate-300">{row.user?.full_name || 'Unknown'}</span>
@@ -98,7 +103,7 @@ export function ProjectAdmissionsList() {
         {
             key: 'dates',
             header: 'Duration',
-            render: (row: Project) => (
+            render: (row: Admission) => (
                 <div className="flex flex-col text-sm text-slate-400">
                     <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
@@ -111,7 +116,7 @@ export function ProjectAdmissionsList() {
         {
             key: 'assets',
             header: 'Assets',
-            render: (row: Project) => (
+            render: (row: Admission) => (
                 <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-400">{row.requested_assets?.length || 0} requested</span>
                     <button
@@ -127,16 +132,16 @@ export function ProjectAdmissionsList() {
         {
             key: 'status',
             header: 'Status',
-            render: (row: Project) => (
+            render: (row: Admission) => (
                 <StatusBadge status={row.status as BadgeStatus} />
             ),
         },
         {
             key: 'actions',
             header: 'Actions',
-            render: (row: Project) => (
+            render: (row: Admission) => (
                 <div className="flex items-center gap-2">
-                    {row.status === 'pending_approval' && (
+                    {row.status === 'pending' && (
                         <>
                             <button
                                 onClick={() => handleStatusUpdate(row.id, 'approved')}
@@ -164,10 +169,6 @@ export function ProjectAdmissionsList() {
         },
     ];
 
-    const filteredProjects = projects.filter(project =>
-        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.user?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
 
     return (
         <div className="space-y-6">
@@ -180,7 +181,7 @@ export function ProjectAdmissionsList() {
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Search projects..."
+                        placeholder="Search projects by name or purpose..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="h-10 w-64 rounded-lg bg-slate-800 pl-10 pr-4 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -190,10 +191,10 @@ export function ProjectAdmissionsList() {
 
             <DataTable
                 columns={columns as any}
-                data={filteredProjects}
-                emptyMessage="No project admissions found" keyExtractor={function (row: Project): string {
-                    throw new Error('Function not implemented.');
-                } }            />
+                data={admissions}
+                emptyMessage="No project admissions found" 
+                keyExtractor={(row) => row.id}
+            />
 
             <Modal
                 isOpen={isDetailsModalOpen}
@@ -201,7 +202,7 @@ export function ProjectAdmissionsList() {
                 title="Requested Assets"
             >
                 <div className="space-y-4">
-                    {selectedProject?.requested_assets?.map((asset, index) => (
+                    {selectedAdmission?.requested_assets?.map((asset, index) => (
                         <div key={index} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-blue-500/10 rounded-lg">
@@ -215,13 +216,13 @@ export function ProjectAdmissionsList() {
                             <StatusBadge status={asset.status as BadgeStatus} />
                         </div>
                     ))}
-                    {selectedProject?.rejection_reason && (
+                    {selectedAdmission?.rejection_reason && (
                         <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
                             <div className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1">Rejection Reason</div>
-                            <div className="text-sm text-slate-300 italic">"{selectedProject.rejection_reason}"</div>
+                            <div className="text-sm text-slate-300 italic">"{selectedAdmission.rejection_reason}"</div>
                         </div>
                     )}
-                    {(!selectedProject?.requested_assets || selectedProject.requested_assets.length === 0) && (
+                    {(!selectedAdmission?.requested_assets || selectedAdmission.requested_assets.length === 0) && (
                         <div className="text-center text-slate-400 py-4">No assets requested for this project.</div>
                     )}
                 </div>

@@ -4,61 +4,58 @@ import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import type { Column } from '@/components/ui/DataTable';
-import type { DroneAsset } from '@/types';
+import type { UnifiedAsset } from '@/types';
 
 import { operationService, type CreateDroneData } from '@/services/operationService';
 import { userService } from '@/services/userService';
-import { reservationService } from '@/services/reservationService';
 import { useAuthStore } from '@/stores/authStore';
 import { hasAnyRole } from '@/lib/roles';
 import toast from 'react-hot-toast';
+import CreatableSelect from 'react-select/creatable';
 
 export function OperationsDashboard() {
     const { user } = useAuthStore();
     const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'manager']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const [reservationModalOpen, setReservationModalOpen] = useState(false);
-    const [selectedAsset, setSelectedAsset] = useState<any>(null);
-    const [reservationForm, setReservationForm] = useState({ start_date: '', end_date: '', notes: '' });
-    const [reserving, setReserving] = useState(false);
+    const [suggestions, setSuggestions] = useState<{ drone_models: string[], accessory_types: string[] }>({
+        drone_models: [],
+        accessory_types: [],
+    });
 
-    const handleReserveClick = (asset: any) => {
-        setSelectedAsset(asset);
-        setReservationForm({ start_date: '', end_date: '', notes: '' });
-        setReservationModalOpen(true);
-    };
 
-    const handleReservationSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedAsset) return;
-        setReserving(true);
-        try {
-            await reservationService.createReservation({
-                asset_type: 'drone',
-                asset_id: selectedAsset.id,
-                start_date: new Date(reservationForm.start_date).toISOString(),
-                end_date: new Date(reservationForm.end_date).toISOString(),
-                notes: reservationForm.notes,
-            });
-            toast.success(`Reservation requested for ${selectedAsset.name}`);
-            setReservationModalOpen(false);
-            fetchDrones();
-        } catch (err: any) {
-            toast.error(err?.response?.data?.error || 'Failed to request reservation');
-        } finally {
-            setReserving(false);
-        }
-    };
 
-    const columns: Column<DroneAsset>[] = [
+    const columns: Column<UnifiedAsset>[] = [
+        {
+            key: 'type',
+            header: 'Type',
+            render: (row) => (
+                <span className={`inline-flex items-center rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                    row.type === 'drone' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' :
+                    row.type === 'battery' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                    'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                }`}>
+                    {row.type}
+                </span>
+            ),
+        },
         {
             key: 'name',
-            header: 'Drone Name',
+            header: 'Asset Name',
             render: (row) => <span className="font-medium text-white">{row.name}</span>,
         },
         { key: 'serial_number', header: 'Serial Number' },
-        { key: 'model', header: 'Model' },
+        { 
+            key: 'model', 
+            header: 'Specs',
+            render: (row) => (
+                <span className="text-slate-400">
+                    {row.type === 'drone' ? row.model : 
+                     row.type === 'battery' ? row.model : 
+                     row.accessory_type || 'General'}
+                </span>
+            )
+        },
         {
             key: 'status',
             header: 'Status',
@@ -66,26 +63,24 @@ export function OperationsDashboard() {
         },
         {
             key: 'total_flight_hours',
-            header: 'Flight Hours',
+            header: 'Hours/Cycles',
             render: (row) => (
                 <span className="flex items-center gap-2 text-slate-200">
-                    <Clock className="h-4 w-4 text-slate-500" />
-                    {row.total_flight_hours.toLocaleString()}h
+                    {row.type === 'drone' ? (
+                        <>
+                            <Clock className="h-4 w-4 text-slate-500" />
+                            {row.total_flight_hours?.toLocaleString()}h
+                        </>
+                    ) : row.type === 'battery' ? (
+                        <>
+                            <div className="h-2 w-2 rounded-full bg-amber-500" />
+                            {row.cycle_count} cycles
+                        </>
+                    ) : (
+                        <span className="text-slate-500">N/A</span>
+                    )}
                 </span>
             ),
-        },
-        {
-            key: 'next_maintenance_date',
-            header: 'Next Maintenance',
-            render: (row) =>
-                row.next_maintenance_date ? (
-                    <span className="flex items-center gap-2 text-slate-200">
-                        <Wrench className="h-4 w-4 text-slate-500" />
-                        {new Date(row.next_maintenance_date).toLocaleDateString()}
-                    </span>
-                ) : (
-                    <span className="text-amber-400 text-xs font-medium">Unscheduled</span>
-                ),
         },
         {
             key: 'id',
@@ -93,21 +88,13 @@ export function OperationsDashboard() {
             sortable: false,
             render: (row) => (
                 <div className="flex items-center gap-2">
-                    <button
-                        disabled={row.status !== 'available'}
-                        onClick={() => handleReserveClick(row)}
-                        className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-white/5 disabled:hover:text-slate-300"
-                    >
-                        <CalendarCheck className="h-3.5 w-3.5" />
-                        Reserve
-                    </button>
                     {row.status === 'maintenance' && (
                         <button
                             onClick={() => {
                                 const notes = window.prompt('Enter maintenance notes (optional):') || 'Routine maintenance completed.';
                                 operationService.resolveMaintenance(row.id, notes).then(() => {
                                     toast.success('Maintenance resolved');
-                                    fetchDrones();
+                                    fetchAssets();
                                 }).catch(() => {
                                     toast.error('Failed to resolve maintenance');
                                 });
@@ -144,7 +131,7 @@ export function OperationsDashboard() {
                                         try {
                                             await operationService.deleteDrone(row.id);
                                             toast.success('Drone deleted successfully');
-                                            fetchDrones();
+                                            fetchAssets();
                                         } catch (e) {
                                             toast.error('Failed to delete drone');
                                         }
@@ -162,7 +149,7 @@ export function OperationsDashboard() {
         }
     ];
 
-    const [drones, setDrones] = useState<DroneAsset[]>([]);
+    const [assets, setAssets] = useState<UnifiedAsset[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -181,21 +168,67 @@ export function OperationsDashboard() {
         type: '',
     });
 
-    const fetchDrones = async () => {
+    const fetchAssets = async () => {
         try {
             setLoading(true);
-            const data = await operationService.getDrones(1, 100); // Fetch all for now
-            setDrones(data.data || []);
+            const data = await operationService.getAssetsUnified();
+            setAssets(data.data || []);
         } catch (error) {
-            toast.error('Failed to load drone fleet');
+            toast.error('Failed to load operations fleet');
         } finally {
             setLoading(false);
         }
     };
 
+    const fetchSuggestions = async () => {
+        try {
+            const data = await operationService.getUniqueTypes();
+            setSuggestions({
+                drone_models: data.drone_models,
+                accessory_types: data.accessory_types,
+            });
+        } catch (e) { }
+    };
+
     useEffect(() => {
-        fetchDrones();
+        fetchAssets();
+        fetchSuggestions();
     }, []);
+
+    const customSelectStyles = {
+        control: (base: any) => ({
+            ...base,
+            backgroundColor: '#1e293b',
+            borderColor: '#334155',
+            borderRadius: '0.75rem',
+            padding: '2px',
+            color: 'white',
+            '&:hover': {
+                borderColor: '#06b6d4',
+            }
+        }),
+        menu: (base: any) => ({
+            ...base,
+            backgroundColor: '#1e293b',
+            border: '1px solid #334155',
+        }),
+        option: (base: any, state: any) => ({
+            ...base,
+            backgroundColor: state.isFocused ? '#334155' : 'transparent',
+            color: 'white',
+            '&:active': {
+                backgroundColor: '#475569',
+            }
+        }),
+        singleValue: (base: any) => ({
+            ...base,
+            color: 'white',
+        }),
+        input: (base: any) => ({
+            ...base,
+            color: 'white',
+        })
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -229,7 +262,7 @@ export function OperationsDashboard() {
             setModalOpen(false);
             setEditingId(null);
             resetForm();
-            fetchDrones();
+            fetchAssets();
         } catch (error) {
             toast.error(`Failed to ${editingId ? 'update' : 'create'} asset`);
         } finally {
@@ -286,10 +319,10 @@ export function OperationsDashboard() {
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                    { label: 'Total Fleet', value: drones.length, color: 'text-white' },
-                    { label: 'Available', value: drones.filter(d => d.status === 'available').length, color: 'text-emerald-400' },
-                    { label: 'In Use', value: drones.filter(d => d.status === 'in_use').length, color: 'text-cyan-400' },
-                    { label: 'Maintenance', value: drones.filter(d => d.status === 'maintenance').length, color: 'text-amber-400' },
+                    { label: 'Total Assets', value: assets.length, color: 'text-white' },
+                    { label: 'Available', value: assets.filter(a => a.status === 'available').length, color: 'text-emerald-400' },
+                    { label: 'Drones', value: assets.filter(a => a.type === 'drone').length, color: 'text-cyan-400' },
+                    { label: 'Batteries', value: assets.filter(a => a.type === 'battery').length, color: 'text-amber-400' },
                 ].map((s) => (
                     <div key={s.label} className="glass-panel p-6">
                         <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{s.label}</p>
@@ -306,9 +339,9 @@ export function OperationsDashboard() {
             ) : (
                 <DataTable
                     columns={columns}
-                    data={drones}
+                    data={assets}
                     keyExtractor={(row) => row.id}
-                    searchPlaceholder="Search by name, serial, or model..."
+                    searchPlaceholder="Search operational assets..."
                 />
             )}
 
@@ -350,14 +383,28 @@ export function OperationsDashboard() {
                         {assetType !== 'accessory' && (
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-200">Model</label>
-                                <input required type="text" value={formData.model} onChange={e => setFormData({ ...formData, model: e.target.value })} placeholder="e.g. M350-RTK" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                                <CreatableSelect
+                                    isClearable
+                                    value={formData.model ? { label: formData.model, value: formData.model } : null}
+                                    options={suggestions.drone_models.map(m => ({ label: m, value: m }))}
+                                    onChange={(opt: any) => setFormData({ ...formData, model: opt ? opt.value : '' })}
+                                    styles={customSelectStyles}
+                                    placeholder="e.g. M350-RTK"
+                                />
                             </div>
                         )}
 
                         {assetType === 'accessory' && (
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-200">Accessory Type</label>
-                                <input required type="text" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value })} placeholder="e.g. Camera, Props, Controller" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                                <CreatableSelect
+                                    isClearable
+                                    value={formData.type ? { label: formData.type, value: formData.type } : null}
+                                    options={suggestions.accessory_types.map(t => ({ label: t, value: t }))}
+                                    onChange={(opt: any) => setFormData({ ...formData, type: opt ? opt.value : '' })}
+                                    styles={customSelectStyles}
+                                    placeholder="e.g. Camera, Props"
+                                />
                             </div>
                         )}
 

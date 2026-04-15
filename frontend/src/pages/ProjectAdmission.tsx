@@ -9,6 +9,7 @@ import { admissionService, AssetAvailability } from '@/services/admissionService
 
 interface AdmissionFormData {
     project_name: string;
+    purpose: string;
     start_date: string;
     end_date: string;
     assets: {
@@ -154,13 +155,14 @@ export function ProjectAdmission() {
 
             await admissionService.createAdmission({
                 project_name: data.project_name,
+                purpose: data.purpose,
                 start_date: new Date(data.start_date).toISOString(),
                 end_date: new Date(data.end_date).toISOString(),
                 requested_assets: requestedAssets
             });
 
             toast.success('Project admission submitted successfully!');
-            navigate('/dashboard'); // Or a success page
+            navigate('/admissions-list');
         } catch (error: any) {
             toast.error(error.response?.data?.error || 'Failed to submit admission');
         } finally {
@@ -206,9 +208,20 @@ export function ProjectAdmission() {
                             <input
                                 {...register('project_name', { required: 'Project name is required' })}
                                 className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all"
-                                placeholder="Enter project name"
+                                placeholder="Enter project name (e.g., Namaa)"
                             />
                             {errors.project_name && <span className="text-xs text-red-400 mt-1">{errors.project_name.message}</span>}
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Purpose / Description</label>
+                            <textarea
+                                {...register('purpose', { required: 'Project purpose is required' })}
+                                className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all"
+                                placeholder="Briefly describe the purpose of this request"
+                                rows={3}
+                            />
+                            {errors.purpose && <span className="text-xs text-red-400 mt-1">{errors.purpose.message}</span>}
                         </div>
 
                         <div>

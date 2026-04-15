@@ -21,6 +21,13 @@ export const operationService = {
         return response.data;
     },
 
+    getAssetsUnified: async (search?: string): Promise<{ data: any[], total: number }> => {
+        const response = await apiClient.get<{ data: any[], total: number }>('/operations/assets', {
+            params: { search }
+        });
+        return response.data;
+    },
+
     getDrone: async (id: string): Promise<DroneAsset> => {
         const response = await apiClient.get<DroneAsset>(`/operations/drones/${id}`);
         return response.data;
@@ -66,6 +73,11 @@ export const operationService = {
 
     createAccessory: async (data: { name: string, type: string, serial_number: string }): Promise<any> => {
         const response = await apiClient.post('/operations/accessories', data);
+        return response.data;
+    },
+
+    getUniqueTypes: async (): Promise<{ drone_models: string[], accessory_types: string[], rnd_asset_types: string[] }> => {
+        const response = await apiClient.get('/assets/unique-types');
         return response.data;
     },
 };

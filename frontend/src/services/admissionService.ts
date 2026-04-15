@@ -18,6 +18,7 @@ export interface RequestedAsset {
 
 export interface CreateAdmissionData {
     project_name: string;
+    purpose?: string;
     start_date: string;
     end_date: string;
     requested_assets: RequestedAsset[];
@@ -36,8 +37,10 @@ export const admissionService = {
         return response.data;
     },
 
-    getAdmissions: async (): Promise<any[]> => {
-        const response = await apiClient.get('/admissions');
+    getAdmissions: async (status?: string, search?: string): Promise<any[]> => {
+        const response = await apiClient.get('/admissions', { 
+            params: { status, search } 
+        });
         return response.data;
     },
 

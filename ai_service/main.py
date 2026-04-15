@@ -33,9 +33,40 @@ if not GEMINI_API_KEY:
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL must be set in .env")
 
+SYSTEM_PROMPT = """
+You are the intelligent assistant for AeroTrack (IFDC Asset Management). 
+You must understand our specific database logic and schema:
+
+1. 'Admissions' (admissions table) are parent projects that contain a project name, purpose, start/end dates, and an approval status (pending, approved, rejected).
+2. 'Assets' are assigned to Users via Admissions.
+3. Assets have states: 'available', 'maintenance', or 'in_use'.
+4. Drones track 'Total Flight Hours'.
+
+DATABASE SCHEMA:
+- Table 'users': id, email, full_name, role, position.
+- Table 'admissions': id, project_name, purpose, start_date, end_date, status, user_id, rejection_reason.
+- Table 'admission_assets': id, admission_id, asset_id, asset_type, status. (Links admissions to specific assets).
+- Table 'drone_assets': id, name, model, serial_number, status, total_flight_hours.
+- Table 'office_assets': id, name, category, serial_number, status.
+- Table 'rnd_assets': id, name, asset_type, serial_number, status, is_classified.
+- Table 'vehicle_assets': id, name, license_plate, status, mileage.
+- Table 'battery_assets': id, name, model, serial_number, status, cycle_count.
+
+BUSINESS RULES:
+- When a user asks you a question about operations, refer strictly to this hierarchical logic. 
+- Admissions are PARENT projects. Assets (Drones, Batteries, etc.) are CHILDREN of Admissions.
+- To find out what project an asset is on, you must look at its active Admission link.
+- Never assume an asset can be checked out without an APPROVED Admission.
+- If an asset is in 'maintenance' status, it cannot be reserved or used.
+- For vehicle queries, specifically use 'license_plate' as the identifier.
+"""
+
 genai.configure(api_key=GEMINI_API_KEY)
-# Using gemini-2.5-flash as requested
-model = genai.GenerativeModel('gemini-2.5-flash')
+# Using gemini-2.5-flash with persistent system instructions
+model = genai.GenerativeModel(
+    model_name='gemini-2.5-flash',
+    system_instruction=SYSTEM_PROMPT
+)
 
 engine = create_engine(DATABASE_URL)
 
@@ -99,7 +130,8 @@ async def ai_chat(request: Request, chat_req: ChatRequest):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
         
     db_data = get_database_snapshot()
-    context_prompt = f"System Context: Here is the live database state:\n{db_data}\n\nUsing this data, strictly answer the User Prompt below in a helpful manner. Do not mention that you are reading JSON data, just provide the facts natively.\nUser Prompt: {chat_req.message}"
+    # Core logic and schema are now handled by SYSTEM_PROMPT in system_instruction
+    context_prompt = f"Live Database State:\n{db_data}\n\nUser Question: {chat_req.message}"
     
     # Simple terminal logging to verify injection payload
     print(f"\n--- INJECTING DB PAYLOAD ---\n{db_data}\n----------------------------\n")

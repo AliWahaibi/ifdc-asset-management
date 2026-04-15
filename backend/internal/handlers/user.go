@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,12 +14,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/microcosm-cc/bluemonday"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // GetUsers retrieves a paginated list of users
 func GetUsers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	search := c.Query("search")
 
 	if page < 1 {
 		page = 1
@@ -35,12 +36,17 @@ func GetUsers(c *gin.Context) {
 	var users []models.User
 	var total int64
 
-	if err := database.DB.Model(&models.User{}).Count(&total).Error; err != nil {
+	query := database.DB.Model(&models.User{})
+	if search != "" {
+		query = query.Where("full_name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count users"})
 		return
 	}
 
-	if err := database.DB.Offset(offset).Limit(limit).Find(&users).Error; err != nil {
+	if err := query.Offset(offset).Limit(limit).Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
 		return
 	}
@@ -160,16 +166,21 @@ func UploadUserFiles(c *gin.Context) {
 		user.Phone = phone
 	}
 
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	user.FullName = p.Sanitize(user.FullName)
+	user.Position = p.Sanitize(user.Position)
+
 	rawPassword := c.PostForm("password")
 	if rawPassword != "" {
-		hasher := sha256.New()
-		hasher.Write([]byte(rawPassword))
-		user.PasswordHash = hex.EncodeToString(hasher.Sum(nil))
+		// Secure Hashing (Bcrypt cost 12 already enforced in planning, but user.go was using SHA-256 legacy)
+		// I should switch this to bcrypt as well to match auth.go hardening
+		hashed, _ := bcrypt.GenerateFromPassword([]byte(rawPassword), 12)
+		user.PasswordHash = string(hashed)
 	} else if !isUpdate {
 		// Provide default only on new creations if omitted
-		hasher := sha256.New()
-		hasher.Write([]byte("password"))
-		user.PasswordHash = hex.EncodeToString(hasher.Sum(nil))
+		hashed, _ := bcrypt.GenerateFromPassword([]byte("password"), 12)
+		user.PasswordHash = string(hashed)
 	}
 
 	role := c.PostForm("role")

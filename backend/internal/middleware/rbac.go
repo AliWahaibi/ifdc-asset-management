@@ -28,7 +28,7 @@ func RBACMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Team Leaders: GET, POST, and specific PATCH
+		// Team Leaders: GET, specific POST, and specific PATCH
 		if role == "team_leader" {
 			if method == http.MethodGet {
 				if strings.HasPrefix(path, "/api/users") {
@@ -49,7 +49,28 @@ func RBACMiddleware() gin.HandlerFunc {
 				return
 			}
 			if method == http.MethodPost {
-				c.Next()
+				// Security Patch: Tighten Team Leader POST access to explicit allow-list
+				allowedPosts := []string{
+					"/api/admissions",
+					"/api/reservations",
+					"/api/operations/assignments",
+					"/api/notifications/read", // If it's a POST
+				}
+				
+				isAllowed := false
+				for _, p := range allowedPosts {
+					if path == p || strings.HasPrefix(path, p+"/") {
+						isAllowed = true
+						break
+					}
+				}
+
+				if isAllowed {
+					c.Next()
+					return
+				}
+				
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Team Leaders are restricted from creating these resources"})
 				return
 			}
 			if method == http.MethodPatch && (strings.HasPrefix(path, "/api/reservations/") || strings.HasPrefix(path, "/api/admissions/")) && strings.HasSuffix(path, "/status") {
@@ -106,5 +127,13 @@ func RBACMiddleware() gin.HandlerFunc {
 
 		// Deny all others
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Unauthorized action"})
+	}
+}
+
+// BodyLimiter prevents DoS attacks by limiting the size of the request body
+func BodyLimiter(limit int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		c.Next()
 	}
 }

@@ -12,15 +12,13 @@ export const apiClient = axios.create({
         'Content-Type': 'application/json',
     },
     timeout: 15000,
+    withCredentials: true, // Crucial for sending/receiving HttpOnly cookies
 });
 
-// ===== Request Interceptor: Attach JWT =====
+// ===== Request Interceptor: Removed manual JWT attachment =====
+// The browser now handles the 'jwt' cookie automatically via withCredentials: true
 apiClient.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        const token = useAuthStore.getState().accessToken;
-        if (token && config.headers) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
         return config;
     },
     (error) => Promise.reject(error)
@@ -64,10 +62,8 @@ apiClient.interceptors.response.use(
         if (isRefreshing) {
             return new Promise<string | null>((resolve, reject) => {
                 failedQueue.push({ resolve, reject });
-            }).then((token) => {
-                if (token && originalRequest.headers) {
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
-                }
+            }).then(() => {
+                // No token needed in queue, browse handles cookies
                 return apiClient(originalRequest);
             });
         }
@@ -76,24 +72,10 @@ apiClient.interceptors.response.use(
         isRefreshing = true;
 
         try {
-            const newToken = await useAuthStore.getState().refreshAccessToken();
-            if (!newToken) {
-                // If refresh store method fails to get a token, clear queue and throw
-                processQueue(new axios.Cancel('Refresh token generation failed') as unknown as AxiosError);
-                // Hard reset
-                useAuthStore.getState().logout();
-                window.location.href = '/login';
-                return Promise.reject(error);
-            }
-
-            processQueue(null, newToken);
-
-            if (newToken && originalRequest.headers) {
-                originalRequest.headers.Authorization = `Bearer ${newToken}`;
-                // Set the token instantly in the store (this is already handled inside refreshAccessToken)
-                // c. Return the retried request
-                return apiClient(originalRequest);
-            }
+            await useAuthStore.getState().refreshAccessToken();
+            // Cookies updated automatically
+            processQueue(null, "success");
+            return apiClient(originalRequest);
         } catch (refreshError) {
             processQueue(refreshError as AxiosError);
             useAuthStore.getState().logout();

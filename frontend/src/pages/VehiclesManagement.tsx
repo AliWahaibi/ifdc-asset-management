@@ -177,7 +177,7 @@ export function VehiclesManagement() {
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <input
                         type="text"
-                        placeholder="Search vehicles..."
+                        placeholder="Search vehicles by name or license plate..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full rounded-xl border border-slate-700 bg-slate-800/50 pl-10 pr-4 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
@@ -196,7 +196,7 @@ export function VehiclesManagement() {
                         columns={columns}
                         data={vehicles}
                         keyExtractor={(row) => row.id}
-                        searchPlaceholder="Search vehicles..."
+                        searchPlaceholder="Search vehicles by name or license plate..."
                     />
                 )}
             </div>

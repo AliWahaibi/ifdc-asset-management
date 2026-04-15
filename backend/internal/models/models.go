@@ -105,6 +105,34 @@ type Project struct {
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+type Admission struct {
+	ID              string           `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	ProjectName     string           `gorm:"not null" json:"project_name"`
+	Purpose         string           `json:"purpose"`
+	StartDate       time.Time        `gorm:"not null" json:"start_date"`
+	EndDate         time.Time        `gorm:"not null" json:"end_date"`
+	Status          string           `gorm:"not null;default:'pending'" json:"status"`
+	UserID          string           `gorm:"type:uuid;not null" json:"user_id"`
+	User            User             `gorm:"foreignKey:UserID" json:"user"`
+	RequestedAssets []AdmissionAsset `gorm:"foreignKey:AdmissionID" json:"requested_assets"`
+	RejectionReason string           `json:"rejection_reason"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt   `gorm:"index" json:"-"`
+}
+
+type AdmissionAsset struct {
+	ID          string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	AdmissionID string         `gorm:"type:uuid;not null" json:"admission_id"`
+	AssetID     string         `gorm:"type:uuid;not null" json:"asset_id"`
+	AssetType   string         `gorm:"not null" json:"asset_type"` // drone, office, rnd, vehicle
+	AssetName   string         `gorm:"-" json:"asset_name"`
+	Status      string         `gorm:"not null;default:'pending'" json:"status"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
 type AssetHistory struct {
 	ID              string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
 	AssetType       string    `gorm:"not null" json:"asset_type"` // drone, office, vehicle, rnd, battery, accessory

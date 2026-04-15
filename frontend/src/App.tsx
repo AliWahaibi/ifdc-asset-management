@@ -8,7 +8,6 @@ import { OperationsDashboard } from '@/pages/OperationsDashboard';
 import { OfficeDashboard } from '@/pages/OfficeDashboard';
 import { RndDashboard } from '@/pages/RndDashboard';
 import { UsersDashboard } from '@/pages/UsersDashboard';
-import { ReservationsDashboard } from '@/pages/ReservationsDashboard';
 import { TimelineCalendar } from '@/pages/TimelineCalendar';
 import { UserProfile } from '@/pages/UserProfile';
 import { SystemSettings } from '@/pages/SystemSettings';
@@ -88,15 +87,6 @@ export function App() {
                         }
                     />
 
-                    {/* Reservations — all authenticated */}
-                    <Route
-                        path="/reservations"
-                        element={
-                            <ProtectedRoute>
-                                <ReservationsDashboard />
-                            </ProtectedRoute>
-                        }
-                    />
 
                     {/* User Management — Super Admin, Admin */}
                     <Route

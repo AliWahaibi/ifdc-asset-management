@@ -40,4 +40,9 @@ export const rndService = {
     deleteAsset: async (id: string): Promise<void> => {
         await apiClient.delete(`/rnd/assets/${id}`);
     },
+
+    getUniqueTypes: async (): Promise<{ drone_models: string[], accessory_types: string[], rnd_asset_types: string[] }> => {
+        const response = await apiClient.get('/assets/unique-types');
+        return response.data;
+    },
 };

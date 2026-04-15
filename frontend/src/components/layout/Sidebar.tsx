@@ -19,6 +19,7 @@ import {
     Bot,
     Briefcase,
     Car,
+    Plus,
 } from 'lucide-react';
 import { useState } from 'react';
 import mainLogo from '@/assets/Asset 2.png';
@@ -57,14 +58,15 @@ const NAV_ITEMS: NavItem[] = [
         icon: <FlaskConical className="h-5 w-5" />,
     },
     {
-        label: 'Reservations',
-        path: '/reservations',
-        icon: <CalendarCheck className="h-5 w-5" />,
+        label: 'New Admission',
+        path: '/admission',
+        icon: <Plus className="h-5 w-5" />,
     },
     {
-        label: 'Project Admission',
-        path: '/admission',
+        label: 'Admission Requests',
+        path: '/admissions-list',
         icon: <Briefcase className="h-5 w-5" />,
+        roles: ['super_admin', 'manager', 'team_leader'],
     },
     {
         label: 'Calendar',

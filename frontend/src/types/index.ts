@@ -56,6 +56,21 @@ export interface DroneAsset {
     updated_at: string;
 }
 
+export interface UnifiedAsset {
+    id: string;
+    name: string;
+    model?: string;
+    type: 'drone' | 'battery' | 'accessory';
+    serial_number: string;
+    status: AssetStatus;
+    department_id: string | null;
+    notes: string;
+    total_flight_hours?: number;
+    cycle_count?: number;
+    accessory_type?: string;
+    updated_at: string;
+}
+
 export interface DroneMaintenanceLog {
     id: string;
     drone_asset_id: string;
@@ -94,7 +109,7 @@ export interface OfficeAsset {
 
 // ===== R&D Category =====
 
-export type RndAssetType = 'vtol' | 'experimental' | 'prototype' | 'component';
+export type RndAssetType = string;
 
 export interface RndAsset {
     id: string;
