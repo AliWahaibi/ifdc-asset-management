@@ -11,8 +11,8 @@ export const userService = {
     },
 
     // Get a single user by ID
-    getUser: async (id: string): Promise<User> => {
-        const response = await apiClient.get<User>(`/users/${id}`);
+    getUser: async (id: string): Promise<{ user: User, office_assets: any[], admissions: any[] }> => {
+        const response = await apiClient.get<{ user: User, office_assets: any[], admissions: any[] }>(`/users/${id}`);
         return response.data;
     },
 

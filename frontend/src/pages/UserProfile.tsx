@@ -1,5 +1,8 @@
-import { Shield, UploadCloud, Save, User as UserIcon, ArrowLeft, Monitor, Briefcase } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/stores/authStore';
+import { userService } from '@/services/userService';
+import { Shield, UploadCloud, Save, User as UserIcon, ArrowLeft, Monitor, Briefcase, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function UserProfile() {
@@ -7,6 +10,7 @@ export function UserProfile() {
     const { user: currentUser } = useAuthStore();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [assignedAssets, setAssignedAssets] = useState<any[]>([]);
     const [admissions, setAdmissions] = useState<any[]>([]);
     const [viewedUser, setViewedUser] = useState<any>(null);
@@ -24,30 +28,39 @@ export function UserProfile() {
 
     useEffect(() => {
         const loadProfile = async () => {
+            if (!currentUser) return;
             setLoading(true);
+            setError(null);
             try {
                 if (isOwnProfile) {
                     const data = await userService.getProfile();
-                    setViewedUser(data.user);
-                    setAssignedAssets(data.office_assets || []);
-                    // Admissions not currently in getProfile response, but we can stick to GetUser logic if we want consistency
-                    // For legacy support, we'll keep getProfile for self.
+                    if (data && data.user) {
+                        setViewedUser(data.user);
+                        setAssignedAssets(data.office_assets || []);
+                    } else {
+                        throw new Error('Profile data incomplete');
+                    }
                 } else if (id) {
                     const data = await userService.getUser(id) as any;
-                    setViewedUser(data.user);
-                    setAssignedAssets(data.office_assets || []);
-                    setAdmissions(data.admissions || []);
+                    if (data && data.user) {
+                        setViewedUser(data.user);
+                        setAssignedAssets(data.office_assets || []);
+                        setAdmissions(data.admissions || []);
+                    } else {
+                        setError('User not found or access denied');
+                    }
                 }
-            } catch (err) {
-                console.error('Failed to load profile', err);
-                toast.error('Failed to load profile data');
+            } catch (err: any) {
+                console.error('Failed to load profile:', err);
+                setError(err.message || 'Failed to load profile data');
+                toast.error('Failed to load profile');
             } finally {
                 setLoading(false);
             }
         };
 
         loadProfile();
-    }, [id, isOwnProfile]);
+    }, [id, isOwnProfile, currentUser]);
 
     useEffect(() => {
         if (viewedUser) {
@@ -76,8 +89,8 @@ export function UserProfile() {
         const uploadData = new FormData();
         uploadData.append('full_name', formData.full_name);
         // Retain basic defaults, don't overwrite role or pass
-        uploadData.append('email', viewedUser.email);
-        uploadData.append('role', viewedUser.role);
+        uploadData.append('email', viewedUser?.email || '');
+        uploadData.append('role', viewedUser?.role || 'user');
 
         uploadData.append('phone', formData.phone);
 
@@ -102,8 +115,30 @@ export function UserProfile() {
     };
 
     if (!currentUser || (loading && !viewedUser)) return (
-        <div className="flex h-screen items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+        <div className="flex h-[60vh] items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+                <p className="text-slate-400 animate-pulse text-sm font-medium">Loading profile details...</p>
+            </div>
+        </div>
+    );
+
+    if (error) return (
+        <div className="mx-auto max-w-3xl py-20 px-4 text-center">
+            <div className="mb-6 flex justify-center">
+                <div className="rounded-2xl bg-rose-500/10 p-4 border border-rose-500/20">
+                    <AlertCircle className="h-10 w-10 text-rose-500" />
+                </div>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Something went wrong</h2>
+            <p className="text-slate-400 mb-8 max-w-md mx-auto">{error}</p>
+            <button 
+                onClick={() => navigate(-1)}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition-all border border-slate-700"
+            >
+                <ArrowLeft className="h-4 w-4" />
+                Go Back
+            </button>
         </div>
     );
 
@@ -118,10 +153,10 @@ export function UserProfile() {
                     </div>
                     <div>
                         <h1 className="font-heading text-3xl font-bold tracking-tight text-white">
-                            {isOwnProfile ? 'My Profile' : `${viewedUser.full_name}'s Profile`}
+                            {isOwnProfile ? 'My Profile' : `${viewedUser?.full_name || 'User'}'s Profile`}
                         </h1>
                         <p className="mt-1 text-slate-400">
-                            {isOwnProfile ? 'Manage your personal information and documents.' : `Viewing deployment and asset details for ${viewedUser.role}.`}
+                            {isOwnProfile ? 'Manage your personal information and documents.' : `Viewing deployment and asset details for ${viewedUser?.role?.replace('_', ' ') || 'member'}.`}
                         </p>
                     </div>
                 </div>
@@ -206,7 +241,7 @@ export function UserProfile() {
             <div className="space-y-4 pt-10 border-t border-slate-700/50">
                 <h2 className="font-heading text-xl font-bold text-white flex items-center gap-2">
                     <Monitor className="h-5 w-5 text-cyan-400" />
-                    {isOwnProfile ? 'My Assigned Assets' : `${viewedUser.role.replace('_', ' ')}'s Assigned Assets`}
+                    {isOwnProfile ? 'My Assigned Assets' : `${viewedUser?.role?.replace('_', ' ') || 'User'}'s Assigned Assets`}
                 </h2>
                 {assignedAssets.length === 0 ? (
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-10 text-center">
