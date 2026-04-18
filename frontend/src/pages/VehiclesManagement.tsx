@@ -16,8 +16,10 @@ export function VehiclesManagement() {
     const [totalPages, setTotalPages] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAsset, setEditingAsset] = useState<VehicleAsset | null>(null);
+    const [mulkiyaImage, setMulkiyaImage] = useState<File | null>(null);
+    const [inspectionImages, setInspectionImages] = useState<File[]>([]);
 
-    const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateVehicleAssetData>();
+    const { register, handleSubmit, reset, formState: { errors } } = useForm<any>();
 
     const fetchAssets = async () => {
         setLoading(true);
@@ -39,21 +41,38 @@ export function VehiclesManagement() {
         return () => clearTimeout(debounce);
     }, [page, searchTerm]);
 
-    const onSubmit = async (data: CreateVehicleAssetData) => {
+    const onSubmit = async (formData: any) => {
         try {
+            const data = new FormData();
+            Object.entries(formData).forEach(([key, value]) => {
+                if (value !== null && value !== undefined) {
+                    data.append(key, value as string);
+                }
+            });
+
+            if (mulkiyaImage) {
+                data.append('mulkiya_image', mulkiyaImage);
+            }
+
+            inspectionImages.forEach((img) => {
+                data.append('inspection_images', img);
+            });
+
             if (editingAsset) {
-                await vehicleService.updateAsset(editingAsset.id, data);
+                await vehicleService.updateVehicle(editingAsset.id, data);
                 toast.success('Vehicle updated successfully');
             } else {
-                await vehicleService.createAsset(data);
+                await vehicleService.createVehicle(data);
                 toast.success('Vehicle created successfully');
             }
             setIsModalOpen(false);
             reset();
             setEditingAsset(null);
+            setMulkiyaImage(null);
+            setInspectionImages([]);
             fetchAssets();
-        } catch (error) {
-            toast.error(editingAsset ? 'Failed to update vehicle' : 'Failed to create vehicle');
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || (editingAsset ? 'Failed to update vehicle' : 'Failed to create vehicle'));
         }
     };
 
@@ -109,6 +128,24 @@ export function VehiclesManagement() {
                     {row.status.replace('_', ' ').toUpperCase()}
                 </span>
             ),
+        },
+        {
+            key: 'mulkiya_expiry_date',
+            header: 'Mulkiya Expiry',
+            render: (row: VehicleAsset) => {
+                if (!row.mulkiya_expiry_date) return <span className="text-slate-500">-</span>;
+                const expiry = new Date(row.mulkiya_expiry_date);
+                const isExpired = expiry < new Date();
+                const isExpiringSoon = expiry < new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+
+                return (
+                    <span className={`font-medium ${isExpired ? 'text-rose-400' : isExpiringSoon ? 'text-amber-400' : 'text-slate-300'}`}>
+                        {format(expiry, 'MMM d, yyyy')}
+                        {isExpired && ' (Expired)'}
+                        {!isExpired && isExpiringSoon && ' (Expiring Soon)'}
+                    </span>
+                );
+            },
         },
         {
             key: 'mileage',
@@ -215,7 +252,9 @@ export function VehiclesManagement() {
                             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
                             placeholder="e.g. Toyota Land Cruiser"
                         />
-                        {errors.name && <span className="text-xs text-red-400">{errors.name.message}</span>}
+                        {errors.name?.message && typeof errors.name.message === 'string' && (
+                            <span className="text-xs text-red-400">{errors.name.message}</span>
+                        )}
                     </div>
 
                     <div>
@@ -223,9 +262,68 @@ export function VehiclesManagement() {
                         <input
                             {...register('license_plate', { required: 'License plate is required' })}
                             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
-                            placeholder="e.g. DXB 12345"
+                            placeholder="e.g. 1234 AB"
                         />
-                        {errors.license_plate && <span className="text-xs text-red-400">{errors.license_plate.message}</span>}
+                        {errors.license_plate?.message && typeof errors.license_plate.message === 'string' && (
+                            <span className="text-xs text-red-400">{errors.license_plate.message}</span>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Rent Start Date</label>
+                            <input
+                                type="date"
+                                {...register('rent_start_date')}
+                                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Rent End Date</label>
+                            <input
+                                type="date"
+                                {...register('rent_end_date')}
+                                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-400 mb-1">Mulkiya Expiry Date</label>
+                        <input
+                            type="date"
+                            {...register('mulkiya_expiry_date')}
+                            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Mulkiya Image</label>
+                            <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                onChange={(e) => setMulkiyaImage(e.target.files?.[0] || null)}
+                                className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-500/10 file:text-emerald-400 hover:file:bg-emerald-500/20"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Inspection Images (Max 10)</label>
+                            <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={(e) => {
+                                    const files = Array.from(e.target.files || []);
+                                    if (files.length > 10) {
+                                        toast.error('Maximum 10 inspection images allowed');
+                                        return;
+                                    }
+                                    setInspectionImages(files);
+                                }}
+                                className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/20"
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

@@ -29,13 +29,17 @@ export const officeService = {
         return response.data;
     },
 
-    createAsset: async (data: CreateOfficeAssetData): Promise<OfficeAsset> => {
-        const response = await apiClient.post<OfficeAsset>('/office/assets', data);
+    createAsset: async (data: FormData): Promise<OfficeAsset> => {
+        const response = await apiClient.post<OfficeAsset>('/office/assets', data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     },
 
-    updateAsset: async (id: string, data: UpdateOfficeAssetData): Promise<OfficeAsset> => {
-        const response = await apiClient.put<OfficeAsset>(`/office/assets/${id}`, data);
+    updateAsset: async (id: string, data: FormData): Promise<OfficeAsset> => {
+        const response = await apiClient.put<OfficeAsset>(`/office/assets/${id}`, data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     },
 

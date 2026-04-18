@@ -35,9 +35,9 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
             <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
 
             {/* Modal */}
-            <div className={`relative w-full ${sizeClasses[size]} animate-fade-in rounded-2xl border border-slate-800/60 bg-slate-900 p-8 shadow-2xl`}>
-                {/* Header */}
-                <div className="mb-6 flex items-center justify-between">
+            <div className={`relative flex flex-col w-full max-h-[90vh] ${sizeClasses[size]} animate-fade-in rounded-2xl border border-slate-800/60 bg-slate-900 shadow-2xl`}>
+                {/* Header - Fixed */}
+                <div className="shrink-0 flex items-center justify-between border-b border-white/5 p-6 pb-5">
                     <h2 className="text-xl font-bold text-white">{title}</h2>
                     <button
                         onClick={onClose}
@@ -46,7 +46,11 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
                         <X className="h-5 w-5" />
                     </button>
                 </div>
-                {children}
+                
+                {/* Body - Scrollable */}
+                <div className="flex-1 overflow-y-auto p-6 pt-5 custom-scrollbar">
+                    {children}
+                </div>
             </div>
         </div>
     );

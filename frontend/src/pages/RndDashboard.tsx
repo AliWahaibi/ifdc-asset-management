@@ -51,6 +51,7 @@ export function RndDashboard() {
             },
         },
         { key: 'serial_number', header: 'Serial' },
+        { key: 'reference_number', header: 'Ref #', render: (row) => <span className="font-mono text-xs font-bold text-cyan-400">{row.reference_number || '—'}</span> },
         { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
         {
             key: 'specifications',
@@ -92,6 +93,7 @@ export function RndDashboard() {
                                     setEditingId(row.id);
                                     setFormData({
                                         name: row.name, asset_type: row.asset_type, serial_number: row.serial_number,
+                                        reference_number: row.reference_number || '',
                                         status: row.status, department_id: row.department_id,
                                         specifications: typeof row.specifications === 'string' ? JSON.parse(row.specifications as string) : (row.specifications || {}),
                                         is_classified: row.is_classified, notes: row.notes,
@@ -134,7 +136,7 @@ export function RndDashboard() {
 
     // Form State
     const [formData, setFormData] = useState<CreateRndAssetData>({
-        name: '', asset_type: 'vtol', serial_number: '', status: 'available',
+        name: '', asset_type: 'vtol', serial_number: '', reference_number: '', status: 'available',
         department_id: null, specifications: {}, is_classified: false, notes: ''
     });
 
@@ -210,7 +212,7 @@ export function RndDashboard() {
             }
             setModalOpen(false);
             setEditingId(null);
-            setFormData({ name: '', asset_type: 'vtol', serial_number: '', status: 'available', department_id: null, specifications: {}, is_classified: false, notes: '' });
+            setFormData({ name: '', asset_type: 'vtol', serial_number: '', reference_number: '', status: 'available', department_id: null, specifications: {}, is_classified: false, notes: '' });
             fetchAssets();
         } catch (error) {
             toast.error('Failed to create R&D asset');
@@ -272,7 +274,7 @@ export function RndDashboard() {
             <Modal isOpen={modalOpen} onClose={() => {
                 setModalOpen(false);
                 setEditingId(null);
-                setFormData({ name: '', asset_type: 'vtol', serial_number: '', status: 'available', department_id: null, specifications: {}, is_classified: false, notes: '' });
+                setFormData({ name: '', asset_type: 'vtol', serial_number: '', reference_number: '', status: 'available', department_id: null, specifications: {}, is_classified: false, notes: '' });
             }} title={editingId ? 'Edit R&D Asset' : 'Add R&D Asset'} size="lg">
                 <form className="space-y-5" onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -289,6 +291,7 @@ export function RndDashboard() {
                             />
                         </div>
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Serial Number</label><input required type="text" value={formData.serial_number} onChange={e => setFormData({ ...formData, serial_number: e.target.value })} placeholder="XX-XX-XXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
+                        <div><label className="mb-2 block text-sm font-medium text-slate-200">Reference Number</label><input type="text" value={formData.reference_number} onChange={e => setFormData({ ...formData, reference_number: e.target.value })} placeholder="RD-XX-XXXXXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         <div className="flex items-center gap-3 pt-8"><input type="checkbox" id="classified" checked={formData.is_classified} onChange={e => setFormData({ ...formData, is_classified: e.target.checked })} className="h-4 w-4 rounded border-slate-600 bg-slate-800" /><label htmlFor="classified" className="text-sm text-slate-300">Mark as Classified</label></div>
                         <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-200">Notes / Details</label><input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Phase testing details..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                     </div>

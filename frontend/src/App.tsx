@@ -17,6 +17,7 @@ import { AIAssistant } from '@/pages/AIAssistant';
 import { ProjectAdmission } from '@/pages/ProjectAdmission';
 import { ProjectAdmissionsList } from '@/pages/ProjectAdmissionsList';
 import { VehiclesManagement } from '@/pages/VehiclesManagement';
+import { LeaveManagement } from '@/pages/LeaveManagement';
 import { Toaster } from 'react-hot-toast';
 
 export function App() {
@@ -44,6 +45,7 @@ export function App() {
                     <Route path="/ai-assistant" element={<AIAssistant />} />
                     <Route path="/profile" element={<UserProfile />} />
                     <Route path="/users/:id" element={<UserProfile />} />
+                    <Route path="/leaves" element={<LeaveManagement />} />
                     <Route path="/admission" element={<ProjectAdmission />} />
                     <Route path="/admissions-list" element={<ProjectAdmissionsList />} />
 

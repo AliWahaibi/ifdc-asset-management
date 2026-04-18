@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { Users, Plus, UploadCloud, FileText } from 'lucide-react';
+import { Users, Plus, UploadCloud, FileText, Eye, Download } from 'lucide-react';
 import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -18,6 +18,7 @@ export function UsersDashboard() {
     const [modalOpen, setModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'account'|'personal'|'documents'>('account');
 
     // Form State
     const [formData, setFormData] = useState({
@@ -26,6 +27,12 @@ export function UsersDashboard() {
         password: '',
         role: 'employee' as UserRole,
         position: '',
+        manager_id: '',
+        department: 'Operation',
+        marital_status: 'Single',
+        address: '',
+        phone: '',
+        whatsapp_number: '',
         cv_file: null as File | null,
         id_card_file: null as File | null,
     });
@@ -88,20 +95,36 @@ export function UsersDashboard() {
             header: 'Documents',
             sortable: false,
             render: (row) => (
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                     {row.cv_url ? (
-                        <a href={row.cv_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-lg bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-colors">
-                            <FileText className="h-3 w-3" /> CV
-                        </a>
+                        <div className="flex items-center gap-1.5">
+                            <span className="flex items-center gap-1 rounded-lg bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-400">
+                                <FileText className="h-3 w-3" /> CV
+                            </span>
+                            <a href={`http://localhost:8080${row.cv_url}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View CV">
+                                <Eye className="h-3 w-3" />
+                            </a>
+                            <a href={`http://localhost:8080${row.cv_url}`} download className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download CV">
+                                <Download className="h-3 w-3" />
+                            </a>
+                        </div>
                     ) : (
                         <span className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2 py-1 text-[11px] font-medium text-slate-500">
                             No CV
                         </span>
                     )}
                     {row.id_card_url ? (
-                        <a href={row.id_card_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-lg bg-violet-500/10 px-2 py-1 text-[11px] font-semibold text-violet-400 hover:bg-violet-500/20 transition-colors">
-                            <FileText className="h-3 w-3" /> ID
-                        </a>
+                        <div className="flex items-center gap-1.5">
+                            <span className="flex items-center gap-1 rounded-lg bg-violet-500/10 px-2 py-1 text-[11px] font-semibold text-violet-400">
+                                <FileText className="h-3 w-3" /> ID
+                            </span>
+                            <a href={`http://localhost:8080${row.id_card_url}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View National ID">
+                                <Eye className="h-3 w-3" />
+                            </a>
+                            <a href={`http://localhost:8080${row.id_card_url}`} download className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download National ID">
+                                <Download className="h-3 w-3" />
+                            </a>
+                        </div>
                     ) : (
                         <span className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2 py-1 text-[11px] font-medium text-slate-500">
                             No ID
@@ -150,6 +173,12 @@ export function UsersDashboard() {
                                             password: '', // Leave blank for edit unless changing
                                             role: validRoles.includes(row.role) ? row.role as UserRole : 'employee',
                                             position: row.position || '',
+                                            manager_id: row.manager_id || '',
+                                            department: row.department || 'Operation',
+                                            marital_status: row.marital_status || 'Single',
+                                            address: row.address || '',
+                                            phone: row.phone || '',
+                                            whatsapp_number: row.whatsapp_number || '',
                                             cv_file: null,
                                             id_card_file: null,
                                         });
@@ -199,6 +228,12 @@ export function UsersDashboard() {
         uploadData.append('password', formData.password);
         uploadData.append('role', formData.role);
         uploadData.append('position', formData.position);
+        uploadData.append('manager_id', formData.manager_id);
+        uploadData.append('department', formData.department);
+        uploadData.append('marital_status', formData.marital_status);
+        uploadData.append('address', formData.address);
+        uploadData.append('phone', formData.phone);
+        uploadData.append('whatsapp_number', formData.whatsapp_number);
 
         if (formData.cv_file) {
             uploadData.append('cv_file', formData.cv_file);
@@ -222,7 +257,7 @@ export function UsersDashboard() {
             setModalOpen(false);
             setEditingId(null);
             setFormData({
-                full_name: '', email: '', password: '', role: 'employee', position: '', cv_file: null, id_card_file: null
+                full_name: '', email: '', password: '', role: 'employee', position: '', manager_id: '', department: 'Operation', marital_status: 'Single', address: '', phone: '', whatsapp_number: '', cv_file: null, id_card_file: null
             });
             fetchUsers();
         } catch (error) {
@@ -281,65 +316,171 @@ export function UsersDashboard() {
             <Modal isOpen={modalOpen} onClose={() => {
                 setModalOpen(false);
                 setEditingId(null);
+                setActiveTab('account');
                 setFormData({
-                    full_name: '', email: '', password: '', role: 'employee', position: '', cv_file: null, id_card_file: null
+                    full_name: '', email: '', password: '', role: 'employee', position: '', manager_id: '', department: 'Operation', marital_status: 'Single', address: '', phone: '', whatsapp_number: '', cv_file: null, id_card_file: null
                 });
             }} title={editingId ? "Edit User" : "Add New User"} size="lg">
-                <form className="space-y-5" onSubmit={handleSubmit}>
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Full Name</label>
-                            <input required type="text" value={formData.full_name} onChange={e => setFormData({ ...formData, full_name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Email Address</label>
-                            <input required type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">
-                                {editingId ? "New Password (Optional)" : "Temporary Password"}
-                            </label>
-                            <input required={!editingId} type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
-                        </div>
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-200">System Role</label>
-                            <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
-                                <option value="super_admin">Super Admin</option>
-                                <option value="manager">Manager</option>
-                                <option value="team_leader">Team Leader</option>
-                                <option value="employee">Employee</option>
-                            </select>
-                        </div>
-                        <div className="sm:col-span-2">
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Position / Job Title</label>
-                            <input type="text" value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
-                        </div>
-
-                        {/* File Uploads */}
-                        <div className="rounded-xl border border-dashed border-slate-600 bg-slate-800/50 p-4">
-                            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-200">
-                                <UploadCloud className="h-4 w-4 text-cyan-400" />
-                                Resume / CV (PDF, PNG, JPG)
-                            </label>
-                            <input type="file" accept=".pdf,image/*" onChange={e => handleFileChange(e, 'cv_file')} className="text-sm text-slate-400 file:mr-4 file:rounded-full file:border-0 file:bg-cyan-500/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-cyan-400 hover:file:bg-cyan-500/20" />
-                        </div>
-                        <div className="rounded-xl border border-dashed border-slate-600 bg-slate-800/50 p-4">
-                            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-200">
-                                <UploadCloud className="h-4 w-4 text-violet-400" />
-                                Emirates ID / Government ID (PDF, PNG, JPG)
-                            </label>
-                            <input type="file" accept=".pdf,image/*" onChange={e => handleFileChange(e, 'id_card_file')} className="text-sm text-slate-400 file:mr-4 file:rounded-full file:border-0 file:bg-violet-500/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-violet-400 hover:file:bg-violet-500/20" />
-                        </div>
+                <form className="space-y-6" onSubmit={handleSubmit}>
+                    {/* Tabs */}
+                    <div className="flex border-b border-slate-800">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('account')}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'account' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                        >
+                            Account Info
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('personal')}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'personal' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                        >
+                            Personal Details
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('documents')}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'documents' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}
+                        >
+                            Documents
+                        </button>
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4">
+                    {/* Tab 1: Account Info */}
+                    {activeTab === 'account' && (
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 animate-fade-in">
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Full Name</label>
+                                <input required type="text" value={formData.full_name} onChange={e => setFormData({ ...formData, full_name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Email Address</label>
+                                <input required type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">
+                                    {editingId ? "New Password (Optional)" : "Temporary Password"}
+                                </label>
+                                <input required={!editingId} type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">System Role</label>
+                                <select value={formData.role} onChange={e => {
+                                const newRole = e.target.value as UserRole;
+                                setFormData({ 
+                                    ...formData, 
+                                    role: newRole, 
+                                    manager_id: newRole === 'employee' ? formData.manager_id : '',
+                                    department: newRole === 'manager' ? 'N/A' : formData.department === 'N/A' ? 'Operation' : formData.department 
+                                });
+                                }} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
+                                    <option value="super_admin">Super Admin</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="team_leader">Team Leader</option>
+                                    <option value="employee">Employee</option>
+                                </select>
+                            </div>
+                            <div className="sm:col-span-1">
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Position / Job Title</label>
+                                <input type="text" value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                            {formData.role === 'employee' ? (
+                                <div className="sm:col-span-1">
+                                    <label className="mb-2 block text-sm font-medium text-slate-200">Team Leader</label>
+                                    <select 
+                                        value={formData.manager_id} 
+                                        onChange={e => setFormData({ ...formData, manager_id: e.target.value })} 
+                                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
+                                    >
+                                        <option value="">None (Reports to CEO directly)</option>
+                                        {users.filter(u => ['manager', 'super_admin', 'team_leader'].includes(u.role) && u.id !== editingId).map(m => (
+                                            <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ) : (
+                                <div className="sm:col-span-1">
+                                    <label className="mb-2 block text-sm font-medium text-slate-200">Team Leader</label>
+                                    <input readOnly value="N/A (Direct Report)" className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed" />
+                                </div>
+                            )}
+
+                            {/* Phase 4 Synchronized Fields */}
+                            {formData.role !== 'manager' ? (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Department</label>
+                                <select value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
+                                    <option value="Operation">Operation</option>
+                                    <option value="Sales">Sales</option>
+                                    <option value="Academy">Academy</option>
+                                    <option value="R&D">R&D</option>
+                                    <option value="Business Development">Business Development</option>
+                                </select>
+                            </div>
+                            ) : (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Department</label>
+                                <input readOnly value="N/A — Managers oversee all departments" className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed" />
+                            </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Tab 2: Personal Details */}
+                    {activeTab === 'personal' && (
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 animate-fade-in">
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Marital Status</label>
+                                <select value={formData.marital_status} onChange={e => setFormData({ ...formData, marital_status: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
+                                    <option value="Single">Single</option>
+                                    <option value="Married">Married</option>
+                                </select>
+                            </div>
+                            <div className="sm:col-span-2">
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Physical Address (Oman)</label>
+                                <input type="text" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Street, City, Postal Code" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">GSM Number (+968)</label>
+                                <input type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="+968 9..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">WhatsApp Number (+968)</label>
+                                <input type="text" value={formData.whatsapp_number} onChange={e => setFormData({ ...formData, whatsapp_number: e.target.value })} placeholder="+968 9..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tab 3: File Uploads */}
+                    {activeTab === 'documents' && (
+                        <div className="grid grid-cols-1 gap-5 animate-fade-in">
+                            <div className="rounded-xl border border-dashed border-slate-600 bg-slate-800/50 p-4">
+                                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-200">
+                                    <UploadCloud className="h-4 w-4 text-cyan-400" />
+                                    Resume / CV (PDF, PNG, JPG)
+                                </label>
+                                <input type="file" accept=".pdf,image/*" onChange={e => handleFileChange(e, 'cv_file')} className="text-sm text-slate-400 file:mr-4 file:rounded-full file:border-0 file:bg-cyan-500/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-cyan-400 hover:file:bg-cyan-500/20" />
+                            </div>
+                            <div className="rounded-xl border border-dashed border-slate-600 bg-slate-800/50 p-4">
+                                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-200">
+                                    <UploadCloud className="h-4 w-4 text-violet-400" />
+                                    National ID (Oman) (PDF, PNG, JPG)
+                                </label>
+                                <input type="file" accept=".pdf,image/*" onChange={e => handleFileChange(e, 'id_card_file')} className="text-sm text-slate-400 file:mr-4 file:rounded-full file:border-0 file:bg-violet-500/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-violet-400 hover:file:bg-violet-500/20" />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-5 border-t border-slate-800/60 mt-4">
                         <button type="button" onClick={() => {
                             setModalOpen(false);
                             setEditingId(null);
+                            setActiveTab('account');
                             setFormData({
-                                full_name: '', email: '', password: '', role: 'employee', position: '', cv_file: null, id_card_file: null
+                                full_name: '', email: '', password: '', role: 'employee', position: '', manager_id: '', department: 'Operation', marital_status: 'Single', address: '', phone: '', whatsapp_number: '', cv_file: null, id_card_file: null
                             });
-                        }} className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-400 hover:bg-slate-800">Cancel</button>
+                        }} className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-400 hover:bg-slate-800 transition-colors">Cancel</button>
                         <button type="submit" disabled={submitting} className="rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
                             {submitting ? 'Saving...' : (editingId ? 'Update User' : 'Create User')}
                         </button>

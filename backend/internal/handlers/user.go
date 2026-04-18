@@ -166,19 +166,31 @@ func UploadUserFiles(c *gin.Context) {
 		user.Phone = phone
 	}
 
+	// New Phase 1 HR Fields
+	if dept := c.PostForm("department"); dept != "" {
+		user.Department = dept
+	}
+	if addr := c.PostForm("address"); addr != "" {
+		user.Address = addr
+	}
+	if marital := c.PostForm("marital_status"); marital != "" {
+		user.MaritalStatus = marital
+	}
+	if wa := c.PostForm("whatsapp_number"); wa != "" {
+		user.WhatsappNumber = wa
+	}
+
 	// XSS Sanitization
 	p := bluemonday.UGCPolicy()
 	user.FullName = p.Sanitize(user.FullName)
 	user.Position = p.Sanitize(user.Position)
+	user.Address = p.Sanitize(user.Address)
 
 	rawPassword := c.PostForm("password")
 	if rawPassword != "" {
-		// Secure Hashing (Bcrypt cost 12 already enforced in planning, but user.go was using SHA-256 legacy)
-		// I should switch this to bcrypt as well to match auth.go hardening
 		hashed, _ := bcrypt.GenerateFromPassword([]byte(rawPassword), 12)
 		user.PasswordHash = string(hashed)
 	} else if !isUpdate {
-		// Provide default only on new creations if omitted
 		hashed, _ := bcrypt.GenerateFromPassword([]byte("password"), 12)
 		user.PasswordHash = string(hashed)
 	}
@@ -189,10 +201,10 @@ func UploadUserFiles(c *gin.Context) {
 		if validRoles[role] {
 			user.Role = role
 		} else {
-			user.Role = "employee" // Default to employee if invalid
+			user.Role = "employee"
 		}
 	} else if !isUpdate {
-		user.Role = "employee" // default for creations
+		user.Role = "employee"
 	}
 
 	if isUpdate {
@@ -200,7 +212,6 @@ func UploadUserFiles(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user in database"})
 			return
 		}
-		c.JSON(http.StatusOK, user)
 	} else {
 		if err := database.DB.Create(&user).Error; err != nil {
 			if database.IsUniqueConstraintError(err) {
@@ -210,8 +221,42 @@ func UploadUserFiles(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user in database"})
 			return
 		}
-		c.JSON(http.StatusCreated, user)
 	}
+
+	// 6. Handle Multi-Document Uploads (UserDocument Table)
+	docTypes := []string{"vehicle_license", "assurance_card", "drone_pilot_certificate", "other_certificate"}
+	docDir := "./uploads/user_documents"
+	os.MkdirAll(docDir, os.ModePerm)
+
+	for _, dt := range docTypes {
+		file, header, err := c.Request.FormFile(dt)
+		if err == nil {
+			defer file.Close()
+			if !isValidMimeType(header.Header.Get("Content-Type")) {
+				continue // Skip invalid types
+			}
+
+			filename := fmt.Sprintf("%s_%s_%d%s", user.ID, dt, time.Now().Unix(), filepath.Ext(header.Filename))
+			savePath := filepath.Join(docDir, filename)
+
+			out, err := os.Create(savePath)
+			if err == nil {
+				io.Copy(out, file)
+				out.Close()
+
+				// Create or Update Document Record
+				var doc models.UserDocument
+				database.DB.Where("user_id = ? AND type = ?", user.ID, dt).First(&doc)
+				doc.UserID = user.ID
+				doc.Type = dt
+				doc.FileURL = fmt.Sprintf("/uploads/user_documents/%s", filename)
+				doc.FileName = header.Filename
+				database.DB.Save(&doc)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, user)
 }
 
 // DeleteUser deletes a user by ID
@@ -272,7 +317,7 @@ func GetProfile(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+	if err := database.DB.Preload("Documents").First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -291,7 +336,7 @@ func GetUser(c *gin.Context) {
 	id := c.Param("id")
 
 	var user models.User
-	if err := database.DB.First(&user, "id = ?", id).Error; err != nil {
+	if err := database.DB.Preload("Documents").First(&user, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}

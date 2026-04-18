@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,7 +11,11 @@ import (
 	"ifdc-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/microcosm-cc/bluemonday"
+	"io"
+	"os"
+	"path/filepath"
 )
  
 // GetUniqueAssetTypes retrieves unique classification strings for frontend suggestions
@@ -28,6 +33,51 @@ func GetUniqueAssetTypes(c *gin.Context) {
 		"accessory_types": accessoryTypes,
 		"rnd_asset_types": rndTypes,
 	})
+}
+
+// Helper to save uploaded files
+func saveUploadedFile(c *gin.Context, fieldName string, uploadDir string, allowedTypes []string) (string, error) {
+	file, header, err := c.Request.FormFile(fieldName)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Validate MIME type if allowedTypes is provided
+	if len(allowedTypes) > 0 {
+		isValid := false
+		contentType := header.Header.Get("Content-Type")
+		for _, t := range allowedTypes {
+			if contentType == t {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			return "", fmt.Errorf("invalid file type: %s", contentType)
+		}
+	}
+
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		return "", err
+	}
+
+	filename := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), filepath.Ext(header.Filename))
+	savePath := filepath.Join(uploadDir, filename)
+
+	out, err := os.Create(savePath)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, file); err != nil {
+		return "", err
+	}
+
+	// Return relative path
+	// Assuming the app serves /uploads/ as static
+	return fmt.Sprintf("/%s/%s", uploadDir, filename), nil
 }
 
 // GetDrones retrieves paginated drones
@@ -97,7 +147,8 @@ func GetOfficeAssets(c *gin.Context) {
 
 	query := database.DB.Model(&models.OfficeAsset{})
 	if search != "" {
-		query = query.Where("name ILIKE ? OR serial_number ILIKE ?", "%"+search+"%", "%"+search+"%")
+		s := "%" + search + "%"
+		query = query.Where("name ILIKE ? OR serial_number ILIKE ? OR reference_number ILIKE ?", s, s, s)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -236,49 +287,53 @@ func CreateDrone(c *gin.Context) {
 
 // CreateOfficeAsset godoc
 func CreateOfficeAsset(c *gin.Context) {
-	var input struct {
-		Name         string  `json:"name" binding:"required,min=2,max=255"`
-		Category     string  `json:"category" binding:"required"`
-		SerialNumber string  `json:"serial_number" binding:"required,min=2,max=100"`
-		Status       string  `json:"status"`
-		DepartmentID *string `json:"department_id"`
-		AssignedTo   *string `json:"assigned_to"`
-		Notes        string  `json:"notes" binding:"max=2000"`
-	}
+	name := c.PostForm("name")
+	categoryName := c.PostForm("category")
+	serialNumber := c.PostForm("serial_number")
+	referenceNumber := c.PostForm("reference_number")
+	status := c.PostForm("status")
+	departmentID := c.PostForm("department_id")
+	assignedTo := c.PostForm("assigned_to")
+	notes := c.PostForm("notes")
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if name == "" || categoryName == "" || serialNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name, category, and serial_number are required"})
 		return
 	}
 
 	// Handle Dynamic Category
 	var category models.Category
-	if err := database.DB.Where("LOWER(name) = LOWER(?) AND asset_type = ?", input.Category, "office").First(&category).Error; err != nil {
+	if err := database.DB.Where("LOWER(name) = LOWER(?) AND asset_type = ?", categoryName, "office").First(&category).Error; err != nil {
 		category = models.Category{
-			Name:      input.Category,
+			Name:      categoryName,
 			AssetType: "office",
 		}
-		if err := database.DB.Create(&category).Error; err != nil {
-			// Ignore if already exists (race condition)
-			if !database.IsUniqueConstraintError(err) {
-				// We don't want to fail the whole asset creation if category insertion fails
-				// But we should log it
-			}
-		}
+		database.DB.Create(&category)
 	}
 
 	asset := models.OfficeAsset{
-		Name:         input.Name,
-		Category:     input.Category,
-		SerialNumber: input.SerialNumber,
-		Status:       "Available",
-		DepartmentID: input.DepartmentID,
-		AssignedTo:   input.AssignedTo,
-		Notes:        input.Notes,
+		Name:            name,
+		Category:        categoryName,
+		SerialNumber:    serialNumber,
+		Status:          "available",
+		ReferenceNumber: referenceNumber,
+		Notes:           notes,
 	}
 
-	if input.Status != "" {
-		asset.Status = input.Status
+	if status != "" {
+		asset.Status = status
+	}
+	if departmentID != "" {
+		asset.DepartmentID = &departmentID
+	}
+	if assignedTo != "" {
+		asset.AssignedTo = &assignedTo
+	}
+
+	// Handle Image Upload
+	imageURL, err := saveUploadedFile(c, "image", "uploads/assets", []string{"image/jpeg", "image/png", "image/webp"})
+	if err == nil {
+		asset.ImageURL = imageURL
 	}
 
 	// XSS Sanitization
@@ -303,14 +358,15 @@ func CreateOfficeAsset(c *gin.Context) {
 // CreateRndAsset godoc
 func CreateRndAsset(c *gin.Context) {
 	var input struct {
-		Name           string                 `json:"name" binding:"required,min=2,max=255"`
-		AssetType      string                 `json:"asset_type" binding:"required"`
-		SerialNumber   string                 `json:"serial_number" binding:"required,min=2,max=100"`
-		Status         string                 `json:"status" binding:"required"`
-		DepartmentID   *string                `json:"department_id"`
-		Specifications map[string]interface{} `json:"specifications"`
-		IsClassified   bool                   `json:"is_classified"`
-		Notes          string                 `json:"notes" binding:"max=2000"`
+		Name            string                 `json:"name" binding:"required,min=2,max=255"`
+		AssetType       string                 `json:"asset_type" binding:"required"`
+		SerialNumber    string                 `json:"serial_number" binding:"required,min=2,max=100"`
+		Status          string                 `json:"status" binding:"required"`
+		DepartmentID    *string                `json:"department_id"`
+		Specifications  map[string]interface{} `json:"specifications"`
+		IsClassified    bool                   `json:"is_classified"`
+		ReferenceNumber string                 `json:"reference_number"`
+		Notes           string                 `json:"notes" binding:"max=2000"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -319,13 +375,14 @@ func CreateRndAsset(c *gin.Context) {
 	}
 
 	asset := models.RndAsset{
-		Name:         input.Name,
-		AssetType:    input.AssetType,
-		SerialNumber: input.SerialNumber,
-		Status:       input.Status,
-		DepartmentID: input.DepartmentID,
-		IsClassified: input.IsClassified,
-		Notes:        input.Notes,
+		Name:            input.Name,
+		AssetType:       input.AssetType,
+		SerialNumber:    input.SerialNumber,
+		Status:          input.Status,
+		DepartmentID:    input.DepartmentID,
+		IsClassified:    input.IsClassified,
+		ReferenceNumber: input.ReferenceNumber,
+		Notes:           input.Notes,
 	}
 
 	// Handle JSONB storage
@@ -385,20 +442,74 @@ func UpdateDrone(c *gin.Context) {
 // UpdateOfficeAsset godoc
 func UpdateOfficeAsset(c *gin.Context) {
 	id := c.Param("id")
-	var input map[string]interface{}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	
 	var asset models.OfficeAsset
 	if err := database.DB.First(&asset, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
 		return
 	}
-	if err := database.DB.Model(&asset).Updates(input).Error; err != nil {
+
+	// Update fields from PostForm
+	if name := c.PostForm("name"); name != "" {
+		asset.Name = name
+	}
+	if category := c.PostForm("category"); category != "" {
+		asset.Category = category
+	}
+	if serial := c.PostForm("serial_number"); serial != "" {
+		asset.SerialNumber = serial
+	}
+	if ref := c.PostForm("reference_number"); ref != "" {
+		asset.ReferenceNumber = ref
+	}
+	if status := c.PostForm("status"); status != "" {
+		asset.Status = status
+	}
+	if notes := c.PostForm("notes"); notes != "" {
+		asset.Notes = notes
+	}
+
+	// Foreign Keys
+	if deptID := c.PostForm("department_id"); deptID != "" {
+		asset.DepartmentID = &deptID
+	}
+	if userID := c.PostForm("user_id"); userID != "" {
+		asset.UserID = &userID
+	}
+	if assignedTo := c.PostForm("assigned_to"); assignedTo != "" {
+		asset.AssignedTo = &assignedTo
+	}
+
+	// Dates
+	if pDateStr := c.PostForm("purchase_date"); pDateStr != "" {
+		if t, err := time.Parse("2006-01-02", pDateStr); err == nil {
+			asset.PurchaseDate = &t
+		}
+	}
+	if wDateStr := c.PostForm("warranty_expiry"); wDateStr != "" {
+		if t, err := time.Parse("2006-01-02", wDateStr); err == nil {
+			asset.WarrantyExpiry = &t
+		}
+	}
+
+	// Handle Image Upload
+	imageURL, err := saveUploadedFile(c, "image", "uploads/assets", []string{"image/jpeg", "image/png", "image/webp"})
+	if err == nil {
+		asset.ImageURL = imageURL
+	}
+
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	asset.Name = p.Sanitize(asset.Name)
+	asset.Category = p.Sanitize(asset.Category)
+	asset.SerialNumber = p.Sanitize(asset.SerialNumber)
+	asset.Notes = p.Sanitize(asset.Notes)
+
+	if err := database.DB.Save(&asset).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
 		return
 	}
+
 	c.JSON(http.StatusOK, asset)
 }
 

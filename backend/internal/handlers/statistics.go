@@ -73,15 +73,16 @@ func GetStatistics(c *gin.Context) {
 	}
 
 	// 3. Status Breakdown (Aggregate across all 3 asset tables)
+	// Use LOWER() to normalize 'Available' vs 'available' into a single group
 	if err := database.DB.Raw(`
-		SELECT status, SUM(c) as count FROM (
+		SELECT LOWER(status) as status, SUM(c) as count FROM (
 			SELECT status, COUNT(*) as c FROM drone_assets WHERE deleted_at IS NULL GROUP BY status
 			UNION ALL
 			SELECT status, COUNT(*) as c FROM office_assets WHERE deleted_at IS NULL GROUP BY status
 			UNION ALL
 			SELECT status, COUNT(*) as c FROM rnd_assets WHERE deleted_at IS NULL GROUP BY status
 		) as combined
-		GROUP BY status
+		GROUP BY LOWER(status)
 	`).Scan(&resp.StatusBreakdown).Error; err != nil {
 		log.Printf("Error fetching status breakdown: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch status breakdown"})

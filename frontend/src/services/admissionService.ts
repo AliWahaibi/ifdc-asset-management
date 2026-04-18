@@ -4,6 +4,8 @@ export interface AssetAvailability {
     id: string;
     name: string;
     type: string;
+    serial_number?: string;
+    reference_number?: string;
     is_reserved: boolean;
     reserved_by_user_name?: string;
     reserved_start?: string;
@@ -22,6 +24,8 @@ export interface CreateAdmissionData {
     start_date: string;
     end_date: string;
     requested_assets: RequestedAsset[];
+    assigned_to_id?: string | null;
+    companion_ids?: string[];
 }
 
 export const admissionService = {
@@ -46,6 +50,11 @@ export const admissionService = {
 
     updateAdmissionStatus: async (id: string, status: 'approved' | 'rejected', rejectionReason?: string): Promise<any> => {
         const response = await apiClient.patch(`/admissions/${id}/status`, { status, rejection_reason: rejectionReason });
+        return response.data;
+    },
+
+    acceptAssignment: async (id: string): Promise<any> => {
+        const response = await apiClient.post(`/admissions/${id}/accept`);
         return response.data;
     }
 }

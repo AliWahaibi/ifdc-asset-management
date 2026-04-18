@@ -47,6 +47,10 @@ func main() {
 		&models.AccessoryAsset{},
 		&models.Admission{},
 		&models.AdmissionAsset{},
+		&models.UserDocument{},
+		&models.LeaveRequest{},
+		&models.ReferenceSequence{},
+		&models.VehicleImage{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)

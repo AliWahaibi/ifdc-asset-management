@@ -17,10 +17,10 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// 1. Serve static files with secure headers (Content-Disposition: attachment)
+	// 1. Serve static files with secure headers (Content-Disposition: inline)
 	r.GET("/uploads/*filepath", func(c *gin.Context) {
 		path := "./uploads" + c.Param("filepath")
-		c.Header("Content-Disposition", "attachment")
+		c.Header("Content-Disposition", "inline")
 		c.File(path)
 	})
 
@@ -28,7 +28,7 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.CORSMiddleware())
 	
 	// Apply Body size limit (2MB) globally to prevent DoS
-	r.Use(middleware.BodyLimiter(2 << 20))
+	r.Use(middleware.BodyLimiter(10 << 20))
 
 	// Global default rate limiting (e.g. 100 req per minute)
 	r.Use(middleware.RateLimiter(rate.Every(time.Minute/100), 100))
@@ -46,6 +46,7 @@ func SetupRouter() *gin.Engine {
 		api.POST("/admissions", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.CreateAdmission)
 		api.GET("/admissions", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetAdmissions)
 		api.PATCH("/admissions/:id/status", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.UpdateAdmissionStatus)
+		api.POST("/admissions/:id/accept", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.AcceptAssignment)
 
 		// Auth routes
 		auth := api.Group("/auth")
@@ -158,6 +159,16 @@ func SetupRouter() *gin.Engine {
 		{
 			notifications.GET("", handlers.GetNotifications)
 			notifications.PATCH("/:id/read", handlers.MarkNotificationRead)
+		}
+
+		// Leaves group
+		leaves := api.Group("/leaves")
+		leaves.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
+		{
+			leaves.GET("", handlers.GetLeaveRequests)
+			leaves.POST("", handlers.CreateLeaveRequest)
+			leaves.PATCH("/:id/status", handlers.UpdateLeaveStatus)
+			leaves.GET("/balance", handlers.GetLeaveBalance)
 		}
 	}
 

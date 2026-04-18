@@ -19,6 +19,8 @@ type AssetAvailability struct {
 	ID                  string     `json:"id"`
 	Name                string     `json:"name"`
 	Type                string     `json:"type"` // drone, office, rnd, vehicle
+	SerialNumber        string     `json:"serial_number,omitempty"`
+	ReferenceNumber     string     `json:"reference_number,omitempty"`
 	IsReserved          bool       `json:"is_reserved"`
 	ReservedByUserName  string     `json:"reserved_by_user_name,omitempty"`
 	ReservedStart       *time.Time `json:"reserved_start,omitempty"`
@@ -45,15 +47,17 @@ func CheckAssetAvailability(c *gin.Context) {
 	var allAssets []AssetAvailability
 
 	// Helper function to check overlaps
-	checkOverlaps := func(assetID string, assetType string, assetName string) AssetAvailability {
+	checkOverlaps := func(assetID string, assetType string, assetName string, serial string, ref string) AssetAvailability {
 		var overlappingRes models.Reservation
 		// Overlap logic: (StartA <= EndB) and (EndA >= StartB)
 		err := database.DB.Preload("User").Preload("Project").Where("asset_id = ? AND status IN ('approved', 'pending') AND (start_date <= ? AND end_date >= ?)", assetID, end, start).First(&overlappingRes).Error
 		
 		availability := AssetAvailability{
-			ID:   assetID,
-			Name: assetName,
-			Type: assetType,
+			ID:              assetID,
+			Name:            assetName,
+			Type:            assetType,
+			SerialNumber:    serial,
+			ReferenceNumber: ref,
 		}
 
 		if err == nil {
@@ -73,28 +77,28 @@ func CheckAssetAvailability(c *gin.Context) {
 	var drones []models.DroneAsset
 	database.DB.Find(&drones)
 	for _, d := range drones {
-		allAssets = append(allAssets, checkOverlaps(d.ID, "drone", d.Name))
+		allAssets = append(allAssets, checkOverlaps(d.ID, "drone", d.Name, d.SerialNumber, ""))
 	}
 
 	// 2. Office Assets
 	var office []models.OfficeAsset
 	database.DB.Find(&office)
 	for _, o := range office {
-		allAssets = append(allAssets, checkOverlaps(o.ID, "office", o.Name))
+		allAssets = append(allAssets, checkOverlaps(o.ID, "office", o.Name, o.SerialNumber, o.ReferenceNumber))
 	}
 
 	// 3. R&D Assets
 	var rnd []models.RndAsset
 	database.DB.Find(&rnd)
 	for _, r := range rnd {
-		allAssets = append(allAssets, checkOverlaps(r.ID, "rnd", r.Name))
+		allAssets = append(allAssets, checkOverlaps(r.ID, "rnd", r.Name, r.SerialNumber, ""))
 	}
 
 	// 4. Vehicles
 	var vehicles []models.VehicleAsset
 	database.DB.Find(&vehicles)
 	for _, v := range vehicles {
-		allAssets = append(allAssets, checkOverlaps(v.ID, "vehicle", v.Name))
+		allAssets = append(allAssets, checkOverlaps(v.ID, "vehicle", v.Name, v.LicensePlate, ""))
 	}
 
 	c.JSON(http.StatusOK, allAssets)

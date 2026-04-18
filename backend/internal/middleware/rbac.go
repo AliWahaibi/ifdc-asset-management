@@ -54,7 +54,8 @@ func RBACMiddleware() gin.HandlerFunc {
 					"/api/admissions",
 					"/api/reservations",
 					"/api/operations/assignments",
-					"/api/notifications/read", // If it's a POST
+					"/api/notifications/read",
+					"/api/leaves",
 				}
 				
 				isAllowed := false
@@ -73,8 +74,8 @@ func RBACMiddleware() gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Team Leaders are restricted from creating these resources"})
 				return
 			}
-			if method == http.MethodPatch && (strings.HasPrefix(path, "/api/reservations/") || strings.HasPrefix(path, "/api/admissions/")) && strings.HasSuffix(path, "/status") {
-				// Explicitly check that they are ONLY updating status to "approved" or "denied"
+			if method == http.MethodPatch && (strings.HasPrefix(path, "/api/reservations/") || strings.HasPrefix(path, "/api/admissions/") || strings.HasPrefix(path, "/api/leaves/")) && strings.HasSuffix(path, "/status") {
+				// Explicitly check that they are ONLY updating status to "approved" or "denied"/"rejected"
 				bodyBytes, err := io.ReadAll(c.Request.Body)
 				if err == nil {
 					// Restore the io.ReadCloser to its original state for the handler
@@ -83,14 +84,17 @@ func RBACMiddleware() gin.HandlerFunc {
 					var reqBody map[string]interface{}
 					if err := json.Unmarshal(bodyBytes, &reqBody); err == nil {
 						if status, ok := reqBody["status"].(string); ok {
-							if status == "approved" || status == "denied" || status == "rejected" {
-								c.Next()
-								return
+							allowedStatuses := []string{"approved", "denied", "rejected", "cancelled"}
+							for _, s := range allowedStatuses {
+								if status == s {
+									c.Next()
+									return
+								}
 							}
 						}
 					}
 				}
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Team Leaders can only approve or deny reservations"})
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Unauthorized status update"})
 				return
 			}
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Team Leaders cannot perform this action"})
@@ -117,8 +121,18 @@ func RBACMiddleware() gin.HandlerFunc {
 				c.Next()
 				return
 			}
-			if method == http.MethodPost && (path == "/api/reservations" || path == "/api/admissions") {
+			if method == http.MethodPost && (path == "/api/reservations" || path == "/api/admissions" || path == "/api/leaves" || strings.HasSuffix(path, "/accept")) {
 				c.Next()
+				return
+			}
+			if method == http.MethodPatch && strings.HasPrefix(path, "/api/leaves/") && strings.HasSuffix(path, "/status") {
+				// Employees can only CANCEL their own requests
+				c.Next() // Deeper check inside handler (userID check)
+				return
+			}
+			if method == http.MethodPatch && strings.HasPrefix(path, "/api/admissions/") && strings.HasSuffix(path, "/status") {
+				// Employees can reject assignments assigned to them
+				c.Next() // Deeper check inside handler
 				return
 			}
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Employees are restricted from this action"})

@@ -5,6 +5,7 @@ export interface CreateRndAssetData {
     name: string;
     asset_type: RndAssetType;
     serial_number: string;
+    reference_number: string;
     status: AssetStatus;
     department_id: string | null;
     specifications: Record<string, unknown>;

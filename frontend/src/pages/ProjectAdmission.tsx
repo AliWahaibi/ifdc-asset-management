@@ -2,10 +2,18 @@ import { useState, useEffect } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Calendar, Plus, Trash2, Car, Briefcase, Info, Loader2, AlertCircle } from 'lucide-react';
+import { 
+    Calendar, Plus, Trash2, Car, Briefcase, Info, Loader2, AlertCircle, 
+    Camera, Users, Users2 
+} from 'lucide-react';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import Select, { components, OptionProps } from 'react-select';
 import { admissionService, AssetAvailability } from '@/services/admissionService';
+import { useAuthStore } from '@/stores/authStore';
+import { userService } from '@/services/userService';
+import { User } from '@/types';
 
 interface AdmissionFormData {
     project_name: string;
@@ -17,6 +25,8 @@ interface AdmissionFormData {
     }[];
     need_vehicle: boolean;
     vehicle_id?: string;
+    companion_ids: string[];
+    assigned_to_id?: string;
 }
 
 interface AssetOption {
@@ -48,9 +58,9 @@ const CustomOption = (props: OptionProps<AssetOption>) => {
 const customStyles = {
     control: (base: any, state: any) => ({
         ...base,
-        background: 'rgba(30, 41, 59, 0.5)', // bg-slate-800/50
-        borderColor: state.isFocused ? '#06b6d4' : '#334155', // cyan-500 or slate-700
-        borderRadius: '0.75rem', // rounded-xl
+        background: 'rgba(30, 41, 59, 0.5)',
+        borderColor: state.isFocused ? '#06b6d4' : '#334155',
+        borderRadius: '0.75rem',
         padding: '2px',
         color: 'white',
         boxShadow: state.isFocused ? '0 0 0 1px #06b6d4' : 'none',
@@ -60,7 +70,7 @@ const customStyles = {
     }),
     menu: (base: any) => ({
         ...base,
-        background: '#1e293b', // bg-slate-800
+        background: '#1e293b',
         borderRadius: '0.75rem',
         border: '1px solid #334155',
         zIndex: 9999
@@ -87,17 +97,25 @@ const customStyles = {
 export function ProjectAdmission() {
     const navigate = useNavigate();
     const [availableAssets, setAvailableAssets] = useState<AssetAvailability[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [loadingAvailability, setLoadingAvailability] = useState(false);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [scanBuffer, setScanBuffer] = useState('');
+    const [lastScanTime, setLastScanTime] = useState(0);
     const [submitting, setSubmitting] = useState(false);
+    const { user: currentUser } = useAuthStore();
+    const isManagerial = currentUser?.role === 'manager' || currentUser?.role === 'team_leader' || currentUser?.role === 'super_admin';
 
-    const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<AdmissionFormData>({
+    const { register, control, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm<AdmissionFormData>({
         defaultValues: {
             assets: [{ asset_id: '' }],
-            need_vehicle: false
+            need_vehicle: false,
+            companion_ids: []
         }
     });
 
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, update } = useFieldArray({
         control,
         name: "assets"
     });
@@ -106,7 +124,70 @@ export function ProjectAdmission() {
     const endDate = watch('end_date');
     const needVehicle = watch('need_vehicle');
 
-    // Fetch availability when dates change
+    useEffect(() => {
+        const fetchUsers = async () => {
+            setLoadingUsers(true);
+            try {
+                const response = await userService.getUsers(1, 100);
+                setUsers(response.data);
+            } catch (error) {
+                console.error('Failed to fetch users', error);
+            } finally {
+                setLoadingUsers(false);
+            }
+        };
+        fetchUsers();
+    }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const currentTime = Date.now();
+            if (currentTime - lastScanTime > 100) {
+                setScanBuffer('');
+            }
+            setLastScanTime(currentTime);
+
+            if (e.key === 'Enter') {
+                if (scanBuffer.length > 2) {
+                    handleScanSuccess(scanBuffer);
+                }
+                setScanBuffer('');
+            } else if (e.key.length === 1) {
+                setScanBuffer(prev => prev + e.key);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [scanBuffer, lastScanTime, availableAssets]);
+
+    const handleScanSuccess = (decodedText: string) => {
+        setIsScannerOpen(false);
+        const matchingAsset = nonVehicleAssets.find(a => 
+            a.serial_number?.toLowerCase() === decodedText.toLowerCase() || 
+            a.reference_number?.toLowerCase() === decodedText.toLowerCase()
+        );
+
+        if (matchingAsset) {
+            const currentAssets = getValues('assets') || [];
+            const isAlreadyAdded = currentAssets.some(a => a.asset_id === matchingAsset.id);
+
+            if (!isAlreadyAdded) {
+                const emptyIndex = currentAssets.findIndex(a => !a.asset_id);
+                if (emptyIndex !== -1) {
+                    update(emptyIndex, { asset_id: matchingAsset.id });
+                } else {
+                    append({ asset_id: matchingAsset.id });
+                }
+                toast.success(`Scanned: ${matchingAsset.name}`);
+            } else {
+                toast.error(`${matchingAsset.name} is already in the list`);
+            }
+        } else {
+            toast.error(`No asset found for code: ${decodedText}`);
+        }
+    };
+
     useEffect(() => {
         const fetchAvailability = async () => {
             if (startDate && endDate) {
@@ -129,7 +210,7 @@ export function ProjectAdmission() {
         setSubmitting(true);
         try {
             const requestedAssets = data.assets
-                .filter(a => a.asset_id) // Filter out empty selections
+                .filter(a => a.asset_id)
                 .map(a => {
                     const asset = availableAssets.find(av => av.id === a.asset_id);
                     return {
@@ -158,7 +239,9 @@ export function ProjectAdmission() {
                 purpose: data.purpose,
                 start_date: new Date(data.start_date).toISOString(),
                 end_date: new Date(data.end_date).toISOString(),
-                requested_assets: requestedAssets
+                requested_assets: requestedAssets,
+                assigned_to_id: data.assigned_to_id,
+                companion_ids: data.companion_ids
             });
 
             toast.success('Project admission submitted successfully!');
@@ -170,7 +253,6 @@ export function ProjectAdmission() {
         }
     };
 
-    // Filter assets by type for dropdowns
     const nonVehicleAssets = availableAssets.filter(a => a.type !== 'vehicle');
     const vehicleAssets = availableAssets.filter(a => a.type === 'vehicle');
 
@@ -183,9 +265,24 @@ export function ProjectAdmission() {
         }));
     };
 
+    const userOptions = users.map(u => ({
+        value: u.id,
+        label: u.full_name,
+        email: u.email
+    }));
+
+    const assetFilter = (option: any, inputValue: string) => {
+        if (!inputValue) return true;
+        const input = inputValue.toLowerCase();
+        const asset = option.data.asset;
+        const serialMatch = asset.serial_number?.toLowerCase().includes(input);
+        const refMatch = asset.reference_number?.toLowerCase().includes(input);
+        const nameMatch = asset.name?.toLowerCase().includes(input);
+        return serialMatch || refMatch || nameMatch;
+    };
+
     return (
         <div className="mx-auto max-w-3xl space-y-8 animate-fade-in py-4">
-            {/* Header */}
             <div className="flex items-center gap-4 mb-8">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 shadow-xl shadow-blue-500/20">
                     <Briefcase className="h-8 w-8 text-white" />
@@ -197,7 +294,6 @@ export function ProjectAdmission() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                {/* Project Details */}
                 <div className="rounded-2xl border border-slate-700/50 bg-slate-900/50 p-6 backdrop-blur-sm">
                     <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                         <Info className="h-5 w-5 text-cyan-400" /> Project Details
@@ -252,19 +348,32 @@ export function ProjectAdmission() {
                     </div>
                 </div>
 
-                {/* Asset Selection */}
                 <div className="relative z-50 rounded-2xl border border-slate-700/50 bg-slate-900/50 p-6 backdrop-blur-sm">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                             <Briefcase className="h-5 w-5 text-violet-400" /> Requested Assets
                         </h2>
-                        <button
-                            type="button"
-                            onClick={() => append({ asset_id: '' })}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-cyan-400 bg-cyan-500/10 rounded-lg hover:bg-cyan-500/20 transition-colors"
-                        >
-                            <Plus className="h-4 w-4" /> Add Asset
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-400 border border-emerald-500/20 animate-pulse uppercase tracking-wider">
+                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                Barcode Scanner Ready
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setIsScannerOpen(true)}
+                                className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-slate-700 transition-all border border-slate-700 hover:border-cyan-500/50 group"
+                            >
+                                <Camera className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
+                                Use Camera
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => append({ asset_id: '' })}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-cyan-400 bg-cyan-500/10 rounded-lg hover:bg-cyan-500/20 transition-colors"
+                            >
+                                <Plus className="h-4 w-4" /> Add
+                            </button>
+                        </div>
                     </div>
 
                     {loadingAvailability ? (
@@ -291,10 +400,11 @@ export function ProjectAdmission() {
                                                     options={formatOptions(nonVehicleAssets)}
                                                     components={{ Option: CustomOption }}
                                                     styles={customStyles}
-                                                    placeholder="Search and select an asset..."
+                                                    placeholder="Scan Barcode or Search Asset..."
                                                     isDisabled={!startDate || !endDate}
                                                     isClearable
                                                     isSearchable
+                                                    filterOption={assetFilter}
                                                     noOptionsMessage={() => "Asset not found"}
                                                     value={formatOptions(nonVehicleAssets).find(op => op.value === value)}
                                                     onChange={(option) => onChange((option as AssetOption)?.value)}
@@ -315,6 +425,62 @@ export function ProjectAdmission() {
                             ))}
                         </div>
                     )}
+                </div>
+
+                {/* Team Allocation */}
+                <div className="relative z-40 rounded-2xl border border-slate-700/50 bg-slate-900/50 p-6 backdrop-blur-sm">
+                    <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <Users className="h-5 w-5 text-indigo-400" /> Team Allocation
+                    </h2>
+                    
+                    <div className="space-y-6">
+                        {isManagerial && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1 flex items-center gap-2">
+                                    <Users2 className="h-4 w-4 text-cyan-400" /> Assign To Employee
+                                    <span className="text-[10px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-500/20 uppercase font-mono">Managerial Only</span>
+                                </label>
+                                <Controller
+                                    control={control}
+                                    name="assigned_to_id"
+                                    render={({ field: { onChange, value } }) => (
+                                        <Select
+                                            options={userOptions}
+                                            styles={customStyles}
+                                            placeholder="Select employee to lead this project..."
+                                            isClearable
+                                            isSearchable
+                                            isLoading={loadingUsers}
+                                            value={userOptions.find(op => op.value === value)}
+                                            onChange={(option: any) => onChange(option?.value)}
+                                        />
+                                    )}
+                                />
+                                <p className="mt-1.5 text-xs text-slate-500 italic">If assigned, the employee will receive a notification to accept the task.</p>
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1 flex items-center gap-2">
+                                <Users className="h-4 w-4 text-violet-400" /> Project Companions
+                            </label>
+                            <Controller
+                                control={control}
+                                name="companion_ids"
+                                render={({ field: { onChange, value } }) => (
+                                    <Select
+                                        isMulti
+                                        options={userOptions}
+                                        styles={customStyles}
+                                        placeholder="Add other team members to this project..."
+                                        isLoading={loadingUsers}
+                                        value={userOptions.filter(op => value?.includes(op.value))}
+                                        onChange={(options: any) => onChange(options ? options.map((opt: any) => opt.value) : [])}
+                                    />
+                                )}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* Vehicle Selection */}
@@ -375,6 +541,17 @@ export function ProjectAdmission() {
                     </button>
                 </div>
             </form>
+            <Modal 
+                isOpen={isScannerOpen} 
+                onClose={() => setIsScannerOpen(false)} 
+                title="Scan Asset Barcode"
+                size="md"
+            >
+                <BarcodeScanner 
+                    onScanSuccess={handleScanSuccess} 
+                    onClose={() => setIsScannerOpen(false)} 
+                />
+            </Modal>
         </div>
     );
 }

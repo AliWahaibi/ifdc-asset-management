@@ -212,7 +212,23 @@ func UpdateReservationStatus(c *gin.Context) {
 	// Sync Asset Status
 	switch req.Status {
 	case "approved":
+		// Blocker: Do NOT allow a vehicle to be dispatched if its Mulkiya is currently expired
+		if res.AssetType == "vehicle" {
+			var vehicle models.VehicleAsset
+			if err := database.DB.First(&vehicle, "id = ?", res.AssetID).Error; err == nil {
+				if vehicle.MulkiyaExpiryDate != nil && vehicle.MulkiyaExpiryDate.Before(time.Now()) {
+					// Revert status update
+					database.DB.Model(&res).Update("status", "pending")
+					c.JSON(http.StatusForbidden, gin.H{
+						"error": fmt.Sprintf("Cannot approve reservation for vehicle '%s' because its Mulkiya registration is expired (Expired on %s)", 
+							vehicle.Name, vehicle.MulkiyaExpiryDate.Format("2006-01-02")),
+					})
+					return
+				}
+			}
+		}
 		updateAssetStatus(res.AssetType, res.AssetID, "reserved")
+
 	case "returned", "completed", "cancelled", "rejected":
 		updateAssetStatus(res.AssetType, res.AssetID, "available")
 	}

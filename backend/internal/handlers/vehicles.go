@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"ifdc-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"path/filepath"
 )
 
 type createVehicleAssetRequest struct {
@@ -84,32 +87,100 @@ func GetVehicleAsset(c *gin.Context) {
 
 // CreateVehicleAsset creates a new vehicle asset
 func CreateVehicleAsset(c *gin.Context) {
-	var req createVehicleAssetRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	name := c.PostForm("name")
+	licensePlate := c.PostForm("license_plate")
+	status := c.PostForm("status")
+	departmentID := c.PostForm("department_id")
+	mileageStr := c.PostForm("mileage")
+	notes := c.PostForm("notes")
+	rentStartStr := c.PostForm("rent_start_date")
+	rentEndStr := c.PostForm("rent_end_date")
+	mulkiyaExpiryStr := c.PostForm("mulkiya_expiry_date")
 
-	req.Name = strings.TrimSpace(req.Name)
-	req.LicensePlate = strings.TrimSpace(req.LicensePlate)
-	req.Notes = strings.TrimSpace(req.Notes)
-
-	if req.Name == "" || req.LicensePlate == "" {
+	if name == "" || licensePlate == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and license_plate are required"})
 		return
 	}
 
+	mileage, _ := strconv.ParseFloat(mileageStr, 64)
+
 	asset := models.VehicleAsset{
-		Name:         req.Name,
-		LicensePlate: req.LicensePlate,
-		Status:       req.Status,
-		DepartmentID: req.DepartmentID,
-		Mileage:      req.Mileage,
-		Notes:        req.Notes,
+		Name:         strings.TrimSpace(name),
+		LicensePlate: strings.TrimSpace(licensePlate),
+		Status:       "available",
+		Mileage:      mileage,
+		Notes:        strings.TrimSpace(notes),
 	}
 
-	if err := database.DB.Create(&asset).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create asset"})
+	if status != "" {
+		asset.Status = status
+	}
+	if departmentID != "" {
+		asset.DepartmentID = &departmentID
+	}
+
+	// Parse Dates
+	if rentStartStr != "" {
+		if t, err := time.Parse("2006-01-02", rentStartStr); err == nil {
+			asset.RentStartDate = &t
+		}
+	}
+	if rentEndStr != "" {
+		if t, err := time.Parse("2006-01-02", rentEndStr); err == nil {
+			asset.RentEndDate = &t
+		}
+	}
+	if mulkiyaExpiryStr != "" {
+		if t, err := time.Parse("2006-01-02", mulkiyaExpiryStr); err == nil {
+			// Blocker: Do NOT allow a vehicle to be added if its Mulkiya is currently expired
+			if t.Before(time.Now()) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot add a vehicle with an expired Mulkiya registration"})
+				return
+			}
+			asset.MulkiyaExpiryDate = &t
+		}
+	}
+
+	// Handle Mulkiya Image
+	mulkiyaURL, err := saveUploadedFile(c, "mulkiya_image", "uploads/vehicles", []string{"image/jpeg", "image/png", "image/pdf", "application/pdf"})
+	if err == nil {
+		asset.MulkiyaImageURL = mulkiyaURL
+	}
+
+	tx := database.DB.Begin()
+
+	if err := tx.Create(&asset).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create vehicle asset"})
+		return
+	}
+
+	// Handle Inspection Images (up to 10)
+	form, _ := c.MultipartForm()
+	files := form.File["inspection_images"]
+	count := 0
+	for _, fileHeader := range files {
+		if count >= 10 {
+			break
+		}
+		
+		// Manual save logic for multiple files (since saveUploadedFile is for single field)
+		uploadDir := "uploads/vehicles"
+		filename := fmt.Sprintf("%s_%d_ins_%s", uuid.New().String(), time.Now().Unix(), filepath.Base(fileHeader.Filename))
+		savePath := filepath.Join(uploadDir, filename)
+		
+		if err := c.SaveUploadedFile(fileHeader, savePath); err == nil {
+			vImg := models.VehicleImage{
+				VehicleAssetID: asset.ID,
+				ImageURL:       fmt.Sprintf("/%s/%s", uploadDir, filename),
+			}
+			tx.Create(&vImg)
+			count++
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit vehicle creation"})
 		return
 	}
 

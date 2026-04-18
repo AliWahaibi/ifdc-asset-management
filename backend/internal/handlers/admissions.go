@@ -23,6 +23,8 @@ type AdmissionRequest struct {
 	StartDate       string         `json:"start_date" binding:"required"`
 	EndDate         string         `json:"end_date" binding:"required"`
 	RequestedAssets []AssetRequest `json:"requested_assets" binding:"required"`
+	AssignedToID    *string        `json:"assigned_to_id"`
+	CompanionIDs    []string       `json:"companion_ids"`
 }
 
 type UpdateAdmissionStatusRequest struct {
@@ -70,19 +72,43 @@ func CreateAdmission(c *gin.Context) {
 	req.Purpose = p.Sanitize(req.Purpose)
 
 	// 1. Create Parent Admission
+	status := "pending"
+	if req.AssignedToID != nil && *req.AssignedToID != "" {
+		status = "pending_acceptance"
+	}
+
 	admission := models.Admission{
-		ProjectName: req.ProjectName,
-		Purpose:     req.Purpose,
-		StartDate:   start,
-		EndDate:     end,
-		Status:      "pending",
-		UserID:      userID,
+		ProjectName:  req.ProjectName,
+		Purpose:      req.Purpose,
+		StartDate:    start,
+		EndDate:      end,
+		Status:       status,
+		UserID:       userID,
+		AssignedToID: req.AssignedToID,
 	}
 
 	if err := tx.Create(&admission).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create admission parent"})
 		return
+	}
+
+	// Link Companions
+	if len(req.CompanionIDs) > 0 {
+		var companions []models.User
+		if err := tx.Where("id IN ?", req.CompanionIDs).Find(&companions).Error; err == nil {
+			tx.Model(&admission).Association("Companions").Append(companions)
+		}
+	}
+
+	// Create Assignment Notification
+	if status == "pending_acceptance" && req.AssignedToID != nil {
+		notification := models.Notification{
+			UserID:  *req.AssignedToID,
+			Title:   "New Project Assignment",
+			Message: fmt.Sprintf("You have been assigned to project: %s. Please accept the assignment.", req.ProjectName),
+		}
+		tx.Create(&notification)
 	}
 
 	// 2. Create Child Admission Assets
@@ -139,7 +165,7 @@ func GetAdmissions(c *gin.Context) {
 	search := c.Query("search")
 	var admissions []models.Admission
 	
-	query := database.DB.Preload("User").Preload("RequestedAssets").Order("created_at desc")
+	query := database.DB.Preload("User").Preload("AssignedTo").Preload("Companions").Preload("RequestedAssets").Order("created_at desc")
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -211,6 +237,21 @@ func UpdateAdmissionStatus(c *gin.Context) {
 	// If approved, create entries in AssetHistory and Reservation (optional)
 	if req.Status == "approved" {
 		for _, ra := range admission.RequestedAssets {
+			// Blocker: Do NOT allow a vehicle to be dispatched if its Mulkiya is currently expired
+			if ra.AssetType == "vehicle" {
+				var vehicle models.VehicleAsset
+				if err := tx.First(&vehicle, "id = ?", ra.AssetID).Error; err == nil {
+					if vehicle.MulkiyaExpiryDate != nil && vehicle.MulkiyaExpiryDate.Before(time.Now()) {
+						tx.Rollback()
+						c.JSON(http.StatusForbidden, gin.H{
+							"error": fmt.Sprintf("Cannot dispatch vehicle '%s' because its Mulkiya registration is expired (Expired on %s)", 
+								vehicle.Name, vehicle.MulkiyaExpiryDate.Format("2006-01-02")),
+						})
+						return
+					}
+				}
+			}
+
 			history := models.AssetHistory{
 				AssetType: ra.AssetType,
 				AssetID:   ra.AssetID,
@@ -298,4 +339,34 @@ func AssignAssets(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Assets assigned successfully"})
+}
+
+// AcceptAssignment allows an employee to confirm a project assigned to them
+func AcceptAssignment(c *gin.Context) {
+	id := c.Param("id")
+	userID := c.GetString("userID")
+
+	var admission models.Admission
+	if err := database.DB.First(&admission, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Admission not found"})
+		return
+	}
+
+	if admission.AssignedToID == nil || *admission.AssignedToID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only the assigned user can accept this project"})
+		return
+	}
+
+	if admission.Status != "pending_acceptance" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This project is not in a state that requires acceptance"})
+		return
+	}
+
+	admission.Status = "pending"
+	if err := database.DB.Save(&admission).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update admission status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Assignment accepted", "admission": admission})
 }

@@ -5,15 +5,18 @@ import { operationService } from '@/services/operationService';
 import { officeService } from '@/services/officeService';
 import { rndService } from '@/services/rndService';
 import { vehicleService } from '@/services/vehicleService';
-import { Calendar, User, FileText, Info, Package } from 'lucide-react';
+import { Calendar, User, FileText, Info, Package, Users } from 'lucide-react';
 
 interface TimelineEvent {
     id: string;
     project_name: string;
     user_name: string;
+    assigned_to_name?: string;
+    companion_names?: string[];
     purpose: string;
     start_date: string;
     end_date: string;
+    status: string;
     requested_assets: any[];
 }
 
@@ -28,7 +31,7 @@ export function AvailabilityTimeline() {
         const fetchData = async () => {
             try {
                 const [admRes, dronesRes, officeRes, rndRes, vehiclesRes] = await Promise.all([
-                    admissionService.getAdmissions('approved'),
+                    admissionService.getAdmissions(), // Get all statuses to show upcoming/pending ones
                     operationService.getDrones(1, 100),
                     officeService.getAssets(1, 100),
                     rndService.getAssets(1, 100),
@@ -40,9 +43,12 @@ export function AvailabilityTimeline() {
                     id: adm.id,
                     project_name: adm.project_name,
                     user_name: adm.user?.full_name || 'System User',
+                    assigned_to_name: adm.assigned_to?.full_name,
+                    companion_names: adm.companions?.map((c: any) => c.full_name) || [],
                     purpose: adm.purpose || 'No purpose specified',
                     start_date: adm.start_date,
                     end_date: adm.end_date,
+                    status: adm.status,
                     requested_assets: adm.requested_assets || []
                 }));
                 setEvents(flatAdmnissions);
@@ -114,7 +120,7 @@ export function AvailabilityTimeline() {
                                 <div className="sticky left-0 z-10 w-64 shrink-0 bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 px-4 py-3 group-hover:bg-slate-800/90 transition-colors flex flex-col justify-center shadow-md">
                                     <p className="text-sm font-semibold text-slate-100 truncate pr-2">{event.project_name}</p>
                                     <span className="inline-flex w-fit mt-1.5 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[10px] font-bold text-cyan-400 uppercase tracking-widest">
-                                        {event.user_name}
+                                        {event.assigned_to_name ? `Assigned to: ${event.assigned_to_name}` : `By: ${event.user_name}`}
                                     </span>
                                 </div>
 
@@ -160,7 +166,7 @@ export function AvailabilityTimeline() {
                                                 >
                                                     <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/bar:opacity-100 transition-opacity"></div>
                                                     <span className="text-[11px] font-extrabold tracking-wide text-white truncate drop-shadow-md whitespace-nowrap">
-                                                        {event.project_name} Deployment ({event.requested_assets?.length} items)
+                                                        {event.project_name} {event.status === 'pending_acceptance' ? '(Waiting)' : ''}
                                                     </span>
                                                 </div>
                                             );
@@ -185,7 +191,7 @@ export function AvailabilityTimeline() {
     );
 }
 
-function AdmissionDetailModal({ isOpen, onClose, event }: { isOpen: boolean, onClose: () => void, event: any }) {
+function AdmissionDetailModal({ isOpen, onClose, event }: { isOpen: boolean, onClose: () => void, event: TimelineEvent }) {
     const [showDetails, setShowDetails] = useState(false);
 
     return (
@@ -200,9 +206,19 @@ function AdmissionDetailModal({ isOpen, onClose, event }: { isOpen: boolean, onC
                             <span className="text-xs font-bold uppercase tracking-[0.2em]">Project Admission</span>
                         </div>
                         <h3 className="text-3xl font-black text-white tracking-tight leading-tight">{event.project_name}</h3>
-                        <div className="mt-4 flex items-center gap-2 text-slate-400">
-                            <User className="h-4 w-4" />
-                            <p className="text-sm font-medium">Requested by <span className="text-slate-100 font-bold">{event.user_name}</span></p>
+                        <div className="mt-4 flex flex-col gap-2">
+                            <div className="flex items-center gap-2 text-slate-400">
+                                <User className="h-4 w-4" />
+                                <p className="text-sm font-medium">Requested by <span className="text-slate-100 font-bold">{event.user_name}</span></p>
+                            </div>
+                            {event.assigned_to_name && (
+                                <div className="flex items-center gap-2 text-cyan-400">
+                                    <div className="h-4 w-4 rounded-full bg-cyan-400/20 flex items-center justify-center">
+                                        <div className="h-2 w-2 rounded-full bg-cyan-400" />
+                                    </div>
+                                    <p className="text-sm font-medium italic">Assigned Lead: <span className="text-cyan-100 font-bold">{event.assigned_to_name}</span></p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -252,6 +268,23 @@ function AdmissionDetailModal({ isOpen, onClose, event }: { isOpen: boolean, onC
                                 ))}
                             </div>
                         </div>
+
+                        {/* Team Section */}
+                        {event.companion_names && event.companion_names.length > 0 && (
+                            <div className="rounded-2xl bg-indigo-500/5 p-6 border border-indigo-500/10">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <Users className="h-5 w-5 text-indigo-400" />
+                                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">Project Team</h4>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {event.companion_names.map((name: string, idx: number) => (
+                                        <span key={idx} className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-xs font-medium text-indigo-300">
+                                            {name}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Detailed View expansion */}
                         {showDetails && (

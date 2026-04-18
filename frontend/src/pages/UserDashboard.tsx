@@ -10,6 +10,9 @@ import {
     CheckCircle2,
     LayoutDashboard,
     FileCheck,
+    ClipboardList,
+    Check,
+    X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { hasMinimumRole } from '@/lib/roles';
@@ -21,6 +24,8 @@ import { rndService } from '@/services/rndService';
 import { reservationService } from '@/services/reservationService';
 import { dashboardService, type Activity } from '@/services/dashboardService';
 import { admissionService } from '@/services/admissionService';
+import toast from 'react-hot-toast';
+import { Modal } from '@/components/ui/Modal';
 
 interface DashboardMetrics {
     totalDrones: number;
@@ -58,6 +63,51 @@ export function UserDashboard() {
     });
     const [activities, setActivities] = useState<Activity[]>([]);
     const [loading, setLoading] = useState(true);
+    const [myAssignments, setMyAssignments] = useState<any[]>([]);
+    const [assignmentLoading, setAssignmentLoading] = useState(false);
+    const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null);
+
+    const fetchMyAssignments = async () => {
+        if (!user) return;
+        try {
+            const allAdmissions = await admissionService.getAdmissions();
+            const pending = allAdmissions.filter(
+                (a: any) => a.assigned_to_id === user.id && a.status === 'pending_acceptance'
+            );
+            setMyAssignments(pending);
+        } catch (error) {
+            console.error('Failed to load assignments:', error);
+        }
+    };
+
+    const handleAcceptAssignment = async (id: string, closeSelected: boolean = false) => {
+        setAssignmentLoading(true);
+        try {
+            await admissionService.acceptAssignment(id);
+            toast.success('Assignment accepted successfully');
+            if (closeSelected) setSelectedAssignment(null);
+            fetchMyAssignments();
+        } catch (error) {
+            toast.error('Failed to accept assignment');
+        } finally {
+            setAssignmentLoading(false);
+        }
+    };
+
+    const handleRejectAssignment = async (id: string, closeSelected: boolean = false) => {
+        if (!window.confirm('Are you sure you want to reject this assignment?')) return;
+        setAssignmentLoading(true);
+        try {
+            await admissionService.updateAdmissionStatus(id, 'rejected', 'Assignment rejected by assignee');
+            toast.success('Assignment rejected');
+            if (closeSelected) setSelectedAssignment(null);
+            fetchMyAssignments();
+        } catch (error) {
+            toast.error('Failed to reject assignment');
+        } finally {
+            setAssignmentLoading(false);
+        }
+    };
 
     useEffect(() => {
         const fetchMetrics = async () => {
@@ -90,6 +140,7 @@ export function UserDashboard() {
         };
 
         fetchMetrics();
+        fetchMyAssignments();
     }, []);
 
     const STATS: StatCard[] = [
@@ -177,6 +228,144 @@ export function UserDashboard() {
                     </div>
                 ))}
             </div>
+
+            {/* My Pending Assignments */}
+            {myAssignments.length > 0 && (
+                <div className="glass-panel p-8 border-l-4 border-l-amber-500">
+                    <h2 className="font-heading mb-6 flex items-center gap-3 text-xl font-bold text-white tracking-tight">
+                        <div className="rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 p-2 shadow-lg shadow-amber-500/20">
+                            <ClipboardList className="h-5 w-5 text-white" />
+                        </div>
+                        My Pending Assignments
+                        <span className="ml-2 rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-bold text-amber-400">
+                            {myAssignments.length}
+                        </span>
+                    </h2>
+                    <div className="space-y-4">
+                        {myAssignments.map((assignment: any) => (
+                            <div
+                                key={assignment.id}
+                                onClick={() => setSelectedAssignment(assignment)}
+                                className="flex items-center justify-between rounded-xl bg-white/[0.03] border border-slate-700/50 px-6 py-5 cursor-pointer transition-colors hover:bg-slate-800 hover:border-cyan-500/50"
+                            >
+                                <div className="flex-1 pr-6">
+                                    <h3 className="text-base font-bold text-white">{assignment.project_name}</h3>
+                                    {assignment.purpose && (
+                                        <p className="mt-1 text-sm text-slate-400">{assignment.purpose}</p>
+                                    )}
+                                    <div className="mt-2 flex gap-4 text-xs text-slate-500">
+                                        <span>From: <span className="text-slate-300 font-mono">{new Date(assignment.start_date).toLocaleDateString()}</span></span>
+                                        <span>To: <span className="text-slate-300 font-mono">{new Date(assignment.end_date).toLocaleDateString()}</span></span>
+                                        {assignment.user?.full_name && (
+                                            <span>Assigned by: <span className="text-cyan-400 font-medium">{assignment.user.full_name}</span></span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex flex-col sm:flex-row items-center gap-3 ml-6" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        onClick={() => handleAcceptAssignment(assignment.id)}
+                                        disabled={assignmentLoading}
+                                        className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-5 py-2.5 text-sm font-bold text-emerald-400 transition-all hover:bg-emerald-500/20 hover:border-emerald-500/40 active:scale-95 disabled:opacity-50"
+                                    >
+                                        <Check className="h-4 w-4" />
+                                        Accept
+                                    </button>
+                                    <button
+                                        onClick={() => handleRejectAssignment(assignment.id)}
+                                        disabled={assignmentLoading}
+                                        className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-5 py-2.5 text-sm font-bold text-rose-400 transition-all hover:bg-rose-500/20 hover:border-rose-500/40 active:scale-95 disabled:opacity-50"
+                                    >
+                                        <X className="h-4 w-4" />
+                                        Reject
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Admission Details Modal */}
+            <Modal
+                isOpen={!!selectedAssignment}
+                onClose={() => setSelectedAssignment(null)}
+                title="Assignment Details"
+                size="lg"
+            >
+                {selectedAssignment && (
+                    <div className="space-y-6">
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Project Description</h3>
+                                <div className="rounded-xl bg-slate-800/50 border border-slate-700 p-4">
+                                    <p className="text-white text-lg font-medium">{selectedAssignment.project_name}</p>
+                                    <p className="mt-2 text-slate-300 leading-relaxed text-sm">
+                                        {selectedAssignment.purpose || "No detailed purpose provided."}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="rounded-xl bg-slate-800/50 border border-slate-700 p-4">
+                                    <h3 className="text-xs font-semibold text-slate-400 uppercase mb-1">Start Date</h3>
+                                    <p className="text-white font-mono">{new Date(selectedAssignment.start_date).toLocaleDateString()}</p>
+                                </div>
+                                <div className="rounded-xl bg-slate-800/50 border border-slate-700 p-4">
+                                    <h3 className="text-xs font-semibold text-slate-400 uppercase mb-1">End Date</h3>
+                                    <p className="text-white font-mono">{new Date(selectedAssignment.end_date).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Requested Assets</h3>
+                                <div className="space-y-2">
+                                    {selectedAssignment.requested_assets?.map((asset: any, index: number) => (
+                                        <div key={index} className="flex justify-between items-center rounded-lg bg-slate-800/50 border border-slate-700 p-3">
+                                            <span className="text-white font-medium">{asset.asset_name || asset.asset_id}</span>
+                                            <span className="text-xs uppercase px-2 py-1 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20">{asset.asset_type}</span>
+                                        </div>
+                                    ))}
+                                    {(!selectedAssignment.requested_assets || selectedAssignment.requested_assets.length === 0) && (
+                                        <div className="text-slate-500 text-sm">No assets requested.</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Companions</h3>
+                                {selectedAssignment.companions?.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedAssignment.companions.map((comp: any) => (
+                                            <span key={comp.id} className="text-sm bg-violet-500/10 text-violet-300 border border-violet-500/20 px-3 py-1.5 rounded-lg">
+                                                {comp.full_name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-slate-500 italic">No companions assigned.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-700/50 pt-5 flex justify-end gap-3 mt-4">
+                            <button
+                                onClick={() => handleRejectAssignment(selectedAssignment.id, true)}
+                                disabled={assignmentLoading}
+                                className="flex items-center gap-2 rounded-xl border border-rose-500/30 px-5 py-2.5 text-sm font-bold text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                            >
+                                <X className="h-4 w-4" /> Reject
+                            </button>
+                            <button
+                                onClick={() => handleAcceptAssignment(selectedAssignment.id, true)}
+                                disabled={assignmentLoading}
+                                className="flex items-center gap-2 rounded-xl bg-emerald-500 border border-emerald-400 px-6 py-2.5 text-sm font-bold text-slate-900 shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-colors disabled:opacity-50"
+                            >
+                                <Check className="h-4 w-4" /> Accept Assignment
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
 
             {/* Activity + System Status */}

@@ -74,6 +74,11 @@ const NAV_ITEMS: NavItem[] = [
         icon: <Calendar className="h-5 w-5" />,
     },
     {
+        label: 'Leave Management',
+        path: '/leaves',
+        icon: <CalendarCheck className="h-5 w-5" />,
+    },
+    {
         label: 'AI Assistant',
         path: '/ai-assistant',
         icon: <Bot className="h-5 w-5" />,

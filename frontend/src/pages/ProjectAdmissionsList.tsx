@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Check, X, Calendar, User, Eye, Box, Search } from 'lucide-react';
+import { Check, X, Calendar, User, Eye, Box, Search, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { admissionService } from '@/services/admissionService';
+import { useAuthStore } from '@/stores/authStore';
 import { DataTable } from '@/components/ui/DataTable';
 import type { Column } from '@/components/ui/DataTable';
 import { Modal } from '@/components/ui/Modal';
@@ -27,9 +28,19 @@ interface Admission {
     end_date: string;
     status: string;
     user: {
+        id: string;
         full_name: string;
         email: string;
     };
+    assigned_to_id?: string;
+    assigned_to?: {
+        id: string;
+        full_name: string;
+    };
+    companions?: {
+        id: string;
+        full_name: string;
+    }[];
     requested_assets: AdmissionAsset[];
     rejection_reason?: string;
 }
@@ -40,6 +51,7 @@ export function ProjectAdmissionsList() {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedAdmission, setSelectedAdmission] = useState<Admission | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const { user: currentUser } = useAuthStore();
 
     const fetchAdmissions = async (search?: string) => {
         setLoading(true);
@@ -74,6 +86,16 @@ export function ProjectAdmissionsList() {
         }
     };
 
+    const handleAccept = async (id: string) => {
+        try {
+            await admissionService.acceptAssignment(id);
+            toast.success('Assignment accepted!');
+            fetchAdmissions();
+        } catch (error) {
+            toast.error('Failed to accept assignment');
+        }
+    };
+
     const openDetailsModal = (admission: Admission) => {
         setSelectedAdmission(admission);
         setIsDetailsModalOpen(true);
@@ -92,11 +114,24 @@ export function ProjectAdmissionsList() {
         },
         {
             key: 'user',
-            header: 'Requester',
+            header: 'Personnel',
             render: (row: Admission) => (
-                <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-slate-400" />
-                    <span className="text-slate-300">{row.user?.full_name || 'Unknown'}</span>
+                <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                        <User className="h-3.5 w-3.5 text-slate-500" />
+                        <span className="text-xs text-slate-500">By: {row.user?.full_name || 'System'}</span>
+                    </div>
+                    {row.assigned_to && (
+                        <div className="flex items-center gap-2">
+                           <div className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                           <span className="text-sm text-cyan-400 font-medium">To: {row.assigned_to.full_name}</span>
+                        </div>
+                    )}
+                    {row.companions && row.companions.length > 0 && (
+                        <div className="text-[10px] text-slate-500 ml-4 font-medium italic">
+                            + {row.companions.length} companions
+                        </div>
+                    )}
                 </div>
             ),
         },
@@ -145,19 +180,27 @@ export function ProjectAdmissionsList() {
                         <>
                             <button
                                 onClick={() => handleStatusUpdate(row.id, 'approved')}
-                                className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-lg transition-colors"
+                                className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-lg transition-colors border border-emerald-500/20"
                                 title="Approve"
                             >
                                 <Check className="h-4 w-4" />
                             </button>
                             <button
                                 onClick={() => handleStatusUpdate(row.id, 'rejected')}
-                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors"
+                                className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-lg transition-colors border border-rose-500/20"
                                 title="Reject"
                             >
                                 <X className="h-4 w-4" />
                             </button>
                         </>
+                    )}
+                    {row.status === 'pending_acceptance' && row.assigned_to_id === currentUser?.id && (
+                        <button
+                            onClick={() => handleAccept(row.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 text-white text-xs font-bold rounded-lg hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 animate-pulse"
+                        >
+                            <Check className="h-3.5 w-3.5" /> Accept Project
+                        </button>
                     )}
                     {row.status === 'rejected' && row.rejection_reason && (
                         <div className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded" title={row.rejection_reason}>
@@ -224,6 +267,21 @@ export function ProjectAdmissionsList() {
                     )}
                     {(!selectedAdmission?.requested_assets || selectedAdmission.requested_assets.length === 0) && (
                         <div className="text-center text-slate-400 py-4">No assets requested for this project.</div>
+                    )}
+
+                    {(selectedAdmission?.companions && selectedAdmission.companions.length > 0) && (
+                        <div className="mt-4 pt-4 border-t border-slate-700/50">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <Users className="h-3 w-3" /> Accompanying Persons
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {selectedAdmission.companions.map(c => (
+                                    <span key={c.id} className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">
+                                        {c.full_name}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
             </Modal>

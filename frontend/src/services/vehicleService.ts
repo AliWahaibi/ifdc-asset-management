@@ -1,8 +1,16 @@
 import { apiClient } from '@/lib/api';
 import type { PaginatedResponse, AssetStatus } from '@/types';
 
+export interface VehicleImage {
+    id: string;
+    vehicle_asset_id: string;
+    image_url: string;
+    created_at: string;
+}
+
 export interface VehicleAsset extends CreateVehicleAssetData {
     id: string;
+    inspection_images?: VehicleImage[];
     created_at: string;
     updated_at: string;
 }
@@ -13,6 +21,10 @@ export interface CreateVehicleAssetData {
     status: AssetStatus;
     department_id: string | null;
     mileage: number;
+    rent_start_date?: string;
+    rent_end_date?: string;
+    mulkiya_expiry_date?: string;
+    mulkiya_image_url?: string;
     notes: string;
 }
 
@@ -31,14 +43,18 @@ export const vehicleService = {
         return response.data;
     },
 
-    createAsset: async (data: CreateVehicleAssetData): Promise<VehicleAsset> => {
-        const response = await apiClient.post<VehicleAsset>('/vehicles/assets', data);
-        return response.data;
+    createVehicle: async (data: FormData): Promise<VehicleAsset> => {
+        const response = apiClient.post<VehicleAsset>('/vehicles', data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return (await response).data;
     },
 
-    updateAsset: async (id: string, data: UpdateVehicleAssetData): Promise<VehicleAsset> => {
-        const response = await apiClient.put<VehicleAsset>(`/vehicles/assets/${id}`, data);
-        return response.data;
+    updateVehicle: async (id: string, data: FormData): Promise<VehicleAsset> => {
+        const response = apiClient.put<VehicleAsset>(`/vehicles/${id}`, data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return (await response).data;
     },
 
     deleteAsset: async (id: string): Promise<void> => {

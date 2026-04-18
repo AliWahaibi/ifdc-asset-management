@@ -71,6 +71,11 @@ export function OfficeDashboard() {
             header: 'Category',
             render: (row) => <span className="text-sm">{CATEGORY_LABELS[row.category] ?? row.category}</span>,
         },
+        {
+            key: 'reference_number',
+            header: 'Ref Number',
+            render: (row) => <span className="font-mono text-xs font-bold text-cyan-400">{row.reference_number}</span>,
+        },
         { key: 'serial_number', header: 'Serial Number' },
         { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status as any} /> },
         {
@@ -102,6 +107,7 @@ export function OfficeDashboard() {
                                         assigned_to: row.assigned_to ?? null, 
                                         purchase_date: row.purchase_date ?? null,
                                         warranty_expiry: row.warranty_expiry ?? null, 
+                                        reference_number: row.reference_number,
                                         notes: row.notes,
                                     });
                                     setModalOpen(true);
@@ -143,10 +149,11 @@ export function OfficeDashboard() {
     const [submitting, setSubmitting] = useState(false);
 
     // Form State
-    const [formData, setFormData] = useState<CreateOfficeAssetData>({
-        name: '', category: 'laptop', serial_number: '', status: 'Available',
+    const [formData, setFormData] = useState<any>({
+        name: '', category: 'laptop', serial_number: '', reference_number: '', status: 'available',
         department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: ''
     });
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
 
     const fetchAssets = async () => {
         try {
@@ -192,20 +199,31 @@ export function OfficeDashboard() {
         e.preventDefault();
         setSubmitting(true);
         try {
+            const data = new FormData();
+            Object.entries(formData).forEach(([key, value]) => {
+                if (value !== null && value !== undefined) {
+                    data.append(key, value as string);
+                }
+            });
+            if (selectedImage) {
+                data.append('image', selectedImage);
+            }
+
             if (editingId) {
-                await officeService.updateAsset(editingId, formData);
+                await officeService.updateAsset(editingId, data);
                 toast.success('Office asset updated successfully');
             } else {
-                await officeService.createAsset(formData);
+                await officeService.createAsset(data);
                 toast.success('Office asset created successfully');
             }
             setModalOpen(false);
             setEditingId(null);
-            setFormData({ name: '', category: 'laptop', serial_number: '', status: 'Available', department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
+            setFormData({ name: '', category: 'laptop', serial_number: '', reference_number: '', status: 'available', department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
+            setSelectedImage(null);
             fetchAssets();
             fetchCategories();
         } catch (error) {
-            toast.error('Failed to create office asset');
+            toast.error('Failed to save office asset');
         } finally {
             setSubmitting(false);
         }
@@ -255,7 +273,7 @@ export function OfficeDashboard() {
             <Modal isOpen={modalOpen} onClose={() => {
                 setModalOpen(false);
                 setEditingId(null);
-                setFormData({ name: '', category: 'laptop', serial_number: '', status: 'Available', department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
+                setFormData({ name: '', category: 'laptop', serial_number: '', reference_number: '', status: 'Available', department_id: null, user_id: null, assigned_to: null, purchase_date: '', warranty_expiry: '', notes: '' });
             }} title={editingId ? 'Edit Office Asset' : 'Add Office Asset'} size="lg">
                 <form className="space-y-5" onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -288,6 +306,7 @@ export function OfficeDashboard() {
                             />
                         </div>
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Serial Number</label><input required type="text" value={formData.serial_number} onChange={e => setFormData({ ...formData, serial_number: e.target.value })} placeholder="XX-XXXX-XXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
+                        <div><label className="mb-2 block text-sm font-medium text-slate-200">Reference Number</label><input required type="text" value={formData.reference_number} onChange={e => setFormData({ ...formData, reference_number: e.target.value })} placeholder="OP-XX-XXXXXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         <div>
                             <label className="mb-2 block text-sm font-medium text-slate-200">Assign to User</label>
                             <Select
@@ -311,8 +330,28 @@ export function OfficeDashboard() {
                                 }}
                             />
                         </div>
-                        <div><label className="mb-2 block text-sm font-medium text-slate-200">Purchase Date</label><input required type="date" value={formData.purchase_date || ''} onChange={e => setFormData({ ...formData, purchase_date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
+                        <div><label className="mb-2 block text-sm font-medium text-slate-200">Purchase Date</label><input type="date" value={formData.purchase_date || ''} onChange={e => setFormData({ ...formData, purchase_date: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Warranty Expiry</label><input type="date" value={formData.warranty_expiry || ''} onChange={e => setFormData({ ...formData, warranty_expiry: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
+                        
+                        <div className="sm:col-span-2">
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Asset Image</label>
+                            <div className="flex items-center gap-4">
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    onChange={e => setSelectedImage(e.target.files?.[0] || null)}
+                                    className="block w-full text-sm text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-violet-500/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-violet-400 hover:file:bg-violet-500/20"
+                                />
+                                {editingId && assets.find(a => a.id === editingId)?.image_url && (
+                                    <img 
+                                        src={`${import.meta.env.VITE_API_URL}${assets.find(a => a.id === editingId)?.image_url}`} 
+                                        alt="Current" 
+                                        className="h-12 w-12 rounded-lg object-cover ring-2 ring-white/10"
+                                    />
+                                )}
+                            </div>
+                        </div>
+
                         <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-200">Notes / Details</label><input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Location, specs..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">

@@ -8,7 +8,11 @@ export type MaintenanceStatus = 'pending' | 'in_progress' | 'completed';
 
 export type ReservationStatus = 'pending' | 'approved' | 'rejected' | 'returned' | 'cancelled';
 
-export type AssetType = 'drone' | 'office' | 'rnd';
+export type LeaveStatus = 'pending_manager' | 'pending_ceo' | 'approved' | 'rejected' | 'cancelled';
+
+export type AssetType = 'drone' | 'office' | 'rnd' | 'vehicle';
+
+export type AdmissionStatus = 'pending_acceptance' | 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
 
 // ===== Core Entities =====
 
@@ -26,14 +30,27 @@ export interface User {
     full_name: string;
     role: UserRole;
     department_id: string | null;
-    department?: Department;
     position: string;
     phone: string;
-    vehicle_license_number: string;
-    vehicle_license_expiry: string | null;
+    department: string;
+    address: string;
+    marital_status: string;
+    whatsapp_number: string;
     cv_url: string;
     id_card_url: string;
     status: string;
+    created_at: string;
+    updated_at: string;
+    documents?: UserDocument[];
+    manager_id?: string;
+}
+
+export interface UserDocument {
+    id: string;
+    user_id: string;
+    type: 'vehicle_license' | 'assurance_card' | 'drone_pilot_certificate' | 'other_certificate';
+    file_url: string;
+    file_name: string;
     created_at: string;
     updated_at: string;
 }
@@ -102,6 +119,8 @@ export interface OfficeAsset {
     assignee?: User;
     purchase_date: string | null;
     warranty_expiry: string | null;
+    reference_number: string;
+    image_url?: string;
     notes: string;
     created_at: string;
     updated_at: string;
@@ -116,6 +135,7 @@ export interface RndAsset {
     name: string;
     asset_type: RndAssetType;
     serial_number: string;
+    reference_number?: string;
     status: AssetStatus;
     department_id: string | null;
     department?: Department;
@@ -181,4 +201,79 @@ export interface PaginatedResponse<T> {
     total: number;
     page: number;
     limit: number;
+}
+
+export interface LeaveRequest {
+    id: string;
+    user_id: string;
+    user?: User;
+    start_date: string;
+    end_date: string;
+    status: LeaveStatus;
+    total_days: number;
+    reason: string;
+    manager_comment?: string;
+    ceo_comment?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface VehicleAsset {
+    id: string;
+    name: string;
+    license_plate: string;
+    status: string;
+    department_id: string | null;
+    mileage: number;
+    rent_start_date?: string;
+    rent_end_date?: string;
+    mulkiya_expiry_date?: string;
+    mulkiya_image_url?: string;
+    inspection_images?: VehicleImage[];
+    notes: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface VehicleImage {
+    id: string;
+    vehicle_asset_id: string;
+    image_url: string;
+    created_at: string;
+}
+
+export interface LeaveBalance {
+    user_id: string;
+    annual_balance: number;
+    used_days: number;
+    remaining_days: number;
+}
+
+export interface AdmissionAsset {
+    id: string;
+    admission_id: string;
+    asset_id: string;
+    asset_type: AssetType;
+    asset_name?: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Admission {
+    id: string;
+    project_name: string;
+    purpose: string;
+    start_date: string;
+    end_date: string;
+    status: AdmissionStatus;
+    user_id: string;
+    user?: User;
+    assigned_to_id?: string | null;
+    assigned_to?: User;
+    companions?: User[];
+    requested_assets: AdmissionAsset[];
+    rejection_reason?: string;
+    created_at: string;
+    updated_at: string;
 }

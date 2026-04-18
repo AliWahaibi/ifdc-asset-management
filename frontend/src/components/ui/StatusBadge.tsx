@@ -1,6 +1,6 @@
-import type { AssetStatus, MaintenanceStatus, ReservationStatus } from '@/types';
+import type { AssetStatus, MaintenanceStatus, ReservationStatus, AdmissionStatus } from '@/types';
 
-type BadgeStatus = AssetStatus | MaintenanceStatus | ReservationStatus;
+type BadgeStatus = AssetStatus | MaintenanceStatus | ReservationStatus | AdmissionStatus;
 
 const STATUS_STYLES: Record<BadgeStatus, { bg: string; text: string; dot: string }> = {
     available: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
@@ -15,6 +15,7 @@ const STATUS_STYLES: Record<BadgeStatus, { bg: string; text: string; dot: string
     rejected: { bg: 'bg-rose-500/10', text: 'text-rose-400', dot: 'bg-rose-400' },
     returned: { bg: 'bg-slate-500/10', text: 'text-slate-400', dot: 'bg-slate-400' },
     cancelled: { bg: 'bg-rose-500/10', text: 'text-rose-400', dot: 'bg-rose-400' },
+    pending_acceptance: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
 };
 
 const STATUS_LABELS: Record<BadgeStatus, string> = {
@@ -22,6 +23,7 @@ const STATUS_LABELS: Record<BadgeStatus, string> = {
     retired: 'Retired', reserved: 'Reserved', pending: 'Pending',
     in_progress: 'In Progress', completed: 'Completed', approved: 'Approved',
     rejected: 'Rejected', returned: 'Returned', cancelled: 'Cancelled',
+    pending_acceptance: 'Awaiting Acceptance',
 };
 
 interface StatusBadgeProps {
