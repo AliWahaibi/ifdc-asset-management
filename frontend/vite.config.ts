@@ -13,6 +13,19 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src'),
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    vendor: ['react', 'react-dom', 'react-router-dom', 'zustand'],
+                    ui: ['lucide-react', 'framer-motion', 'react-hot-toast', 'react-hook-form', 'react-select', 'clsx', 'tailwind-merge'],
+                    charts: ['recharts'],
+                    scanner: ['html5-qrcode'],
+                    spline: ['@splinetool/react-spline', '@splinetool/runtime'],
+                },
+            },
+        },
+    },
     server: {
         port: 5173,
         proxy: {
