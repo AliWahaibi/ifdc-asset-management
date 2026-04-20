@@ -88,6 +88,7 @@ export interface UnifiedAsset {
     total_flight_hours?: number;
     cycle_count?: number;
     accessory_type?: string;
+    image_url?: string;
     updated_at: string;
 }
 
