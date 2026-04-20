@@ -88,11 +88,26 @@ export function VehiclesManagement() {
         }
     };
 
+    const handleDispatch = async (vehicle: VehicleAsset) => {
+        if (window.confirm(`Are you sure you want to dispatch ${vehicle.name}? This will mark it as IN USE.`)) {
+            try {
+                const data = new FormData();
+                data.append('status', 'in_use');
+                await vehicleService.updateVehicle(vehicle.id, data);
+                toast.success('Vehicle dispatched successfully');
+                fetchAssets();
+            } catch (error) {
+                toast.error('Failed to dispatch vehicle');
+            }
+        }
+    };
+
     const openEditModal = (asset: VehicleAsset) => {
         setEditingAsset(asset);
         reset({
             name: asset.name,
             license_plate: asset.license_plate,
+            reference_number: asset.reference_number,
             status: asset.status,
             mileage: asset.mileage,
             notes: asset.notes
@@ -111,7 +126,9 @@ export function VehiclesManagement() {
                     </div>
                     <div>
                         <div className="font-medium text-white">{row.name}</div>
-                        <div className="text-xs text-slate-500">{row.license_plate}</div>
+                        <div className="text-xs text-slate-500">
+                            {row.license_plate} {row.reference_number ? ` • ${row.reference_number}` : ''}
+                        </div>
                     </div>
                 </div>
             ),
@@ -161,7 +178,15 @@ export function VehiclesManagement() {
             key: 'id',
             header: 'Actions',
             render: (row: VehicleAsset) => (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    {row.status === 'available' && (
+                        <button
+                            onClick={() => handleDispatch(row)}
+                            className="p-2 text-blue-400 hover:text-white hover:bg-blue-500/50 rounded-lg transition-colors border border-blue-500/30 bg-blue-500/10 text-xs font-bold flex items-center gap-1"
+                        >
+                            Dispatch
+                        </button>
+                    )}
                     <button
                         onClick={() => openEditModal(row)}
                         className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
@@ -257,16 +282,26 @@ export function VehiclesManagement() {
                         )}
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">License Plate</label>
-                        <input
-                            {...register('license_plate', { required: 'License plate is required' })}
-                            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
-                            placeholder="e.g. 1234 AB"
-                        />
-                        {errors.license_plate?.message && typeof errors.license_plate.message === 'string' && (
-                            <span className="text-xs text-red-400">{errors.license_plate.message}</span>
-                        )}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">License Plate</label>
+                            <input
+                                {...register('license_plate', { required: 'License plate is required' })}
+                                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                                placeholder="e.g. 1234 AB"
+                            />
+                            {errors.license_plate?.message && typeof errors.license_plate.message === 'string' && (
+                                <span className="text-xs text-red-400">{errors.license_plate.message}</span>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Reference Number</label>
+                            <input
+                                {...register('reference_number')}
+                                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                                placeholder="e.g. IFDC-V-001"
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

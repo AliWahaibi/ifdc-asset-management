@@ -18,6 +18,7 @@ export interface VehicleAsset extends CreateVehicleAssetData {
 export interface CreateVehicleAssetData {
     name: string;
     license_plate: string;
+    reference_number?: string;
     status: AssetStatus;
     department_id: string | null;
     mileage: number;
@@ -44,17 +45,17 @@ export const vehicleService = {
     },
 
     createVehicle: async (data: FormData): Promise<VehicleAsset> => {
-        const response = apiClient.post<VehicleAsset>('/vehicles', data, {
+        const response = await apiClient.post<VehicleAsset>('/vehicles/assets', data, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
-        return (await response).data;
+        return response.data;
     },
 
     updateVehicle: async (id: string, data: FormData): Promise<VehicleAsset> => {
-        const response = apiClient.put<VehicleAsset>(`/vehicles/${id}`, data, {
+        const response = await apiClient.put<VehicleAsset>(`/vehicles/assets/${id}`, data, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
-        return (await response).data;
+        return response.data;
     },
 
     deleteAsset: async (id: string): Promise<void> => {

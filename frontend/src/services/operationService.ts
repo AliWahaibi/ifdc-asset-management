@@ -5,6 +5,7 @@ export interface CreateDroneData {
     name: string;
     model: string;
     serial_number: string;
+    reference_number?: string;
     status: AssetStatus;
     department_id: string | null;
     total_flight_hours: number;
@@ -33,18 +34,26 @@ export const operationService = {
         return response.data;
     },
 
-    createDrone: async (data: CreateDroneData): Promise<DroneAsset> => {
-        const response = await apiClient.post<DroneAsset>('/operations/drones', data);
+    createDrone: async (data: FormData): Promise<DroneAsset> => {
+        const response = await apiClient.post<DroneAsset>('/operations/drones', data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     },
 
-    updateDrone: async (id: string, data: UpdateDroneData): Promise<DroneAsset> => {
-        const response = await apiClient.put<DroneAsset>(`/operations/drones/${id}`, data);
+    updateDrone: async (id: string, data: FormData): Promise<DroneAsset> => {
+        const response = await apiClient.put<DroneAsset>(`/operations/drones/${id}`, data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     },
 
     deleteDrone: async (id: string): Promise<void> => {
         await apiClient.delete(`/operations/drones/${id}`);
+    },
+
+    deleteDroneImage: async (id: string): Promise<void> => {
+        await apiClient.delete(`/operations/drones/${id}/image`);
     },
 
     resolveMaintenance: async (id: string, notes: string): Promise<DroneAsset> => {

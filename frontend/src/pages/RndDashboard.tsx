@@ -3,6 +3,7 @@ import { FlaskConical, Plus, ShieldAlert, FileJson, CalendarCheck, Edit2, Trash2
 import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
+import { AssetImageManager } from '@/components/ui/AssetImageManager';
 import type { Column } from '@/components/ui/DataTable';
 import type { RndAsset } from '@/types';
 
@@ -135,6 +136,7 @@ export function RndDashboard() {
     const [submitting, setSubmitting] = useState(false);
 
     // Form State
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [formData, setFormData] = useState<CreateRndAssetData>({
         name: '', asset_type: 'vtol', serial_number: '', reference_number: '', status: 'available',
         department_id: null, specifications: {}, is_classified: false, notes: ''
@@ -203,19 +205,35 @@ export function RndDashboard() {
         e.preventDefault();
         setSubmitting(true);
         try {
+            const data = new FormData();
+            data.append('name', formData.name);
+            data.append('asset_type', formData.asset_type);
+            data.append('serial_number', formData.serial_number);
+            data.append('reference_number', formData.reference_number || '');
+            data.append('status', formData.status);
+            data.append('is_classified', String(formData.is_classified));
+            data.append('notes', formData.notes);
+            if (formData.department_id) data.append('department_id', formData.department_id);
+            data.append('specifications', JSON.stringify(formData.specifications));
+
+            if (selectedImage) {
+                data.append('image', selectedImage);
+            }
+
             if (editingId) {
-                await rndService.updateAsset(editingId, formData);
+                await rndService.updateAsset(editingId, data);
                 toast.success('R&D asset updated successfully');
             } else {
-                await rndService.createAsset(formData);
+                await rndService.createAsset(data);
                 toast.success('R&D asset created successfully');
             }
             setModalOpen(false);
             setEditingId(null);
+            setSelectedImage(null);
             setFormData({ name: '', asset_type: 'vtol', serial_number: '', reference_number: '', status: 'available', department_id: null, specifications: {}, is_classified: false, notes: '' });
             fetchAssets();
         } catch (error) {
-            toast.error('Failed to create R&D asset');
+            toast.error('Failed to save R&D asset');
         } finally {
             setSubmitting(false);
         }
@@ -274,6 +292,7 @@ export function RndDashboard() {
             <Modal isOpen={modalOpen} onClose={() => {
                 setModalOpen(false);
                 setEditingId(null);
+                setSelectedImage(null);
                 setFormData({ name: '', asset_type: 'vtol', serial_number: '', reference_number: '', status: 'available', department_id: null, specifications: {}, is_classified: false, notes: '' });
             }} title={editingId ? 'Edit R&D Asset' : 'Add R&D Asset'} size="lg">
                 <form className="space-y-5" onSubmit={handleSubmit}>
@@ -293,6 +312,21 @@ export function RndDashboard() {
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Serial Number</label><input required type="text" value={formData.serial_number} onChange={e => setFormData({ ...formData, serial_number: e.target.value })} placeholder="XX-XX-XXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Reference Number</label><input type="text" value={formData.reference_number} onChange={e => setFormData({ ...formData, reference_number: e.target.value })} placeholder="RD-XX-XXXXXX" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         <div className="flex items-center gap-3 pt-8"><input type="checkbox" id="classified" checked={formData.is_classified} onChange={e => setFormData({ ...formData, is_classified: e.target.checked })} className="h-4 w-4 rounded border-slate-600 bg-slate-800" /><label htmlFor="classified" className="text-sm text-slate-300">Mark as Classified</label></div>
+                        
+                        <div className="sm:col-span-2">
+                            <AssetImageManager
+                                imageUrl={editingId ? (assets.find(a => a.id === editingId)?.image_url || null) : null}
+                                assetName={formData.name || 'R&D Asset'}
+                                onDelete={async () => {
+                                    if (editingId) {
+                                        await rndService.deleteImage(editingId);
+                                        fetchAssets();
+                                    }
+                                }}
+                                onUploadChange={(file) => setSelectedImage(file)}
+                            />
+                        </div>
+
                         <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-200">Notes / Details</label><input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Phase testing details..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">

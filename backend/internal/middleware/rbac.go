@@ -22,9 +22,23 @@ func RBACMiddleware() gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.Request.URL.Path
 
-		// Managers & Super Admins: full CRUD access
-		if role == "super_admin" || role == "manager" {
+		// Managers, Super Admins, & CEOs: full CRUD access
+		if role == "super_admin" || role == "manager" || role == "ceo" {
 			c.Next()
+			return
+		}
+
+		// HR: Read-only for everything except leaves and profile access
+		if role == "hr" {
+			if method == http.MethodGet {
+				c.Next()
+				return
+			}
+			if strings.HasPrefix(path, "/api/leaves") {
+				c.Next()
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "HR role has read-only access for this action"})
 			return
 		}
 

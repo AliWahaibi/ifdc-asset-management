@@ -197,7 +197,7 @@ func UploadUserFiles(c *gin.Context) {
 
 	role := c.PostForm("role")
 	if role != "" {
-		validRoles := map[string]bool{"super_admin": true, "manager": true, "team_leader": true, "employee": true}
+		validRoles := map[string]bool{"super_admin": true, "manager": true, "team_leader": true, "employee": true, "ceo": true, "hr": true}
 		if validRoles[role] {
 			user.Role = role
 		} else {
@@ -224,16 +224,17 @@ func UploadUserFiles(c *gin.Context) {
 	}
 
 	// 6. Handle Multi-Document Uploads (UserDocument Table)
-	docTypes := []string{"vehicle_license", "assurance_card", "drone_pilot_certificate", "other_certificate"}
 	docDir := "./uploads/user_documents"
 	os.MkdirAll(docDir, os.ModePerm)
 
+	// Single document types
+	docTypes := []string{"vehicle_license", "assurance_card", "drone_pilot_certificate"}
 	for _, dt := range docTypes {
 		file, header, err := c.Request.FormFile(dt)
 		if err == nil {
 			defer file.Close()
 			if !isValidMimeType(header.Header.Get("Content-Type")) {
-				continue // Skip invalid types
+				continue
 			}
 
 			filename := fmt.Sprintf("%s_%s_%d%s", user.ID, dt, time.Now().Unix(), filepath.Ext(header.Filename))
@@ -244,7 +245,6 @@ func UploadUserFiles(c *gin.Context) {
 				io.Copy(out, file)
 				out.Close()
 
-				// Create or Update Document Record
 				var doc models.UserDocument
 				database.DB.Where("user_id = ? AND type = ?", user.ID, dt).First(&doc)
 				doc.UserID = user.ID
@@ -256,7 +256,176 @@ func UploadUserFiles(c *gin.Context) {
 		}
 	}
 
+	// Multi-document types
+	if form, err := c.MultipartForm(); err == nil {
+		otherFiles := form.File["other_certificate"]
+		for i, fileHeader := range otherFiles {
+			if i >= 20 { // Max 20 files
+				break
+			}
+			file, err := fileHeader.Open()
+			if err != nil {
+				continue
+			}
+			defer file.Close()
+
+			if !isValidMimeType(fileHeader.Header.Get("Content-Type")) {
+				continue
+			}
+
+			// For multiple files, we use a unique timestamp/index per file to avoid overwriting
+			filename := fmt.Sprintf("%s_other_cert_%d_%d%s", user.ID, time.Now().Unix(), i, filepath.Ext(fileHeader.Filename))
+			savePath := filepath.Join(docDir, filename)
+
+			out, err := os.Create(savePath)
+			if err == nil {
+				io.Copy(out, file)
+				out.Close()
+
+				// Always create a new record for multiple uploads
+				doc := models.UserDocument{
+					UserID:   user.ID,
+					Type:     "other_certificate",
+					FileURL:  fmt.Sprintf("/uploads/user_documents/%s", filename),
+					FileName: fileHeader.Filename,
+				}
+				database.DB.Create(&doc)
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, user)
+}
+
+// DeleteUserDocument deletes a specific document (UserDocument or main User CV/ID)
+func DeleteUserDocument(c *gin.Context) {
+	userID := c.Param("id")
+	docID := c.Param("docId")
+
+	// If it's the CV or ID card, docID might be 'cv' or 'id_card'
+	if docID == "cv" || docID == "id_card" {
+		var user models.User
+		if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		
+		switch docID {
+		case "cv":
+			// Try to physical remove file
+			if user.CVUrl != "" {
+				os.Remove("." + user.CVUrl) // relative to root
+			}
+			user.CVUrl = ""
+		case "id_card":
+			if user.IDCardUrl != "" {
+				os.Remove("." + user.IDCardUrl)
+			}
+			user.IDCardUrl = ""
+		}
+		
+		database.DB.Save(&user)
+		c.JSON(http.StatusOK, gin.H{"message": "Document deleted successfully"})
+		return
+	}
+
+	// Otherwise, it's a UserDocument record
+	var doc models.UserDocument
+	if err := database.DB.Where("id = ? AND user_id = ?", docID, userID).First(&doc).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	// Remove physical file
+	if doc.FileURL != "" {
+		os.Remove("." + doc.FileURL)
+	}
+
+	if err := database.DB.Delete(&doc).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete document record"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Document deleted successfully"})
+}
+
+// ReplaceUserDocument replaces an uploaded document
+func ReplaceUserDocument(c *gin.Context) {
+	userID := c.Param("id")
+	docID := c.Param("docId")
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		return
+	}
+	defer file.Close()
+
+	if !isValidMimeType(header.Header.Get("Content-Type")) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type"})
+		return
+	}
+
+	if docID == "cv" || docID == "id_card" {
+		var user models.User
+		if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+
+		uploadDir := "./uploads/users"
+		os.MkdirAll(uploadDir, os.ModePerm)
+		filename := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), filepath.Ext(header.Filename))
+		savePath := filepath.Join(uploadDir, filename)
+
+		out, err := os.Create(savePath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+			return
+		}
+		defer out.Close()
+		io.Copy(out, file)
+
+		if docID == "cv" {
+			if user.CVUrl != "" { os.Remove("." + user.CVUrl) }
+			user.CVUrl = fmt.Sprintf("/uploads/users/%s", filename)
+		} else {
+			if user.IDCardUrl != "" { os.Remove("." + user.IDCardUrl) }
+			user.IDCardUrl = fmt.Sprintf("/uploads/users/%s", filename)
+		}
+		database.DB.Save(&user)
+		c.JSON(http.StatusOK, user)
+		return
+	}
+
+	var doc models.UserDocument
+	if err := database.DB.Where("id = ? AND user_id = ?", docID, userID).First(&doc).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	docDir := "./uploads/user_documents"
+	os.MkdirAll(docDir, os.ModePerm)
+	filename := fmt.Sprintf("%s_%s_%d%s", userID, doc.Type, time.Now().Unix(), filepath.Ext(header.Filename))
+	savePath := filepath.Join(docDir, filename)
+
+	out, err := os.Create(savePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+	defer out.Close()
+	io.Copy(out, file)
+
+	if doc.FileURL != "" {
+		os.Remove("." + doc.FileURL)
+	}
+
+	doc.FileURL = fmt.Sprintf("/uploads/user_documents/%s", filename)
+	doc.FileName = header.Filename
+	database.DB.Save(&doc)
+
+	c.JSON(http.StatusOK, doc)
 }
 
 // DeleteUser deletes a user by ID

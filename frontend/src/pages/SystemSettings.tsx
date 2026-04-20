@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { settingsService, SystemSetting } from '@/services/settingsService';
-import { Settings, Save, Building, Mail, Activity, DollarSign } from 'lucide-react';
+import { settingsService, SystemSetting, BlackoutDate } from '@/services/settingsService';
+import { Settings, Save, Building, Mail, Activity, DollarSign, Calendar, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function SystemSettings() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
+    
+    const [newBlackout, setNewBlackout] = useState({ start_date: '', end_date: '', reason: '' });
 
     const [settings, setSettings] = useState<SystemSetting>({
         id: 1,
@@ -19,8 +22,12 @@ export function SystemSettings() {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const data = await settingsService.getSettings();
-                setSettings(data);
+                const [settingsData, blackoutData] = await Promise.all([
+                    settingsService.getSettings(),
+                    settingsService.getBlackoutDates()
+                ]);
+                setSettings(settingsData);
+                setBlackoutDates(blackoutData);
             } catch (error) {
                 toast.error('Failed to load system settings');
             } finally {
@@ -41,6 +48,31 @@ export function SystemSettings() {
             toast.error('Failed to save settings');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleCreateBlackout = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await settingsService.createBlackoutDate(newBlackout);
+            toast.success('Blackout date created');
+            setNewBlackout({ start_date: '', end_date: '', reason: '' });
+            const data = await settingsService.getBlackoutDates();
+            setBlackoutDates(data);
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || 'Failed to create blackout date');
+        }
+    };
+
+    const handleDeleteBlackout = async (id: string) => {
+        if (!window.confirm('Are you sure you want to delete this blackout date?')) return;
+        try {
+            await settingsService.deleteBlackoutDate(id);
+            toast.success('Blackout date deleted');
+            const data = await settingsService.getBlackoutDates();
+            setBlackoutDates(data);
+        } catch (error) {
+            toast.error('Failed to delete blackout date');
         }
     };
 
@@ -122,7 +154,7 @@ export function SystemSettings() {
                 <div className="flex justify-end pt-2">
                     {(() => {
                         const { user } = useAuthStore.getState();
-                        const canEdit = user ? ['super_admin', 'admin'].includes(user.role) : false;
+                        const canEdit = user ? ['super_admin', 'ceo', 'admin'].includes(user.role) : false;
                         if (!canEdit) return null;
                         return (
                             <button type="submit" disabled={submitting} className="flex flex-1 sm:flex-none w-auto items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 active:scale-[0.98] disabled:opacity-50">
@@ -133,6 +165,52 @@ export function SystemSettings() {
                     })()}
                 </div>
             </form>
+
+            {/* Blackout Dates Section - Separate Form */}
+            {['ceo', 'super_admin'].includes(useAuthStore.getState().user?.role || '') && (
+                <div className="rounded-2xl border border-slate-700/50 bg-slate-900/50 p-6 md:p-8 relative overflow-hidden shadow-2xl mt-8">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-rose-500 to-amber-500" />
+                    <h3 className="mb-6 text-lg font-semibold text-white flex items-center gap-2">
+                        <Calendar className="h-5 w-5 text-rose-400" /> CEO Leave Blackout Dates
+                    </h3>
+                    <p className="text-sm text-slate-400 mb-6">Create restrictions to prevent Annual Leaves from being booked during these critical periods.</p>
+
+                    <form onSubmit={handleCreateBlackout} className="grid grid-cols-1 gap-4 sm:grid-cols-4 items-end mb-6 bg-slate-800/30 p-4 rounded-xl border border-slate-700">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Start Date</label>
+                            <input required type="date" value={newBlackout.start_date} onChange={e => setNewBlackout({...newBlackout, start_date: e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">End Date</label>
+                            <input required type="date" value={newBlackout.end_date} onChange={e => setNewBlackout({...newBlackout, end_date: e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Reason / Event Name</label>
+                            <input required type="text" placeholder="e.g. Audit Week" value={newBlackout.reason} onChange={e => setNewBlackout({...newBlackout, reason: e.target.value})} className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+                        </div>
+                        <button type="submit" className="flex items-center justify-center gap-2 rounded-lg bg-rose-500/10 px-4 py-2 hover:bg-rose-500/20 text-rose-400 text-sm font-semibold transition-colors border border-rose-500/20">
+                            <Plus className="h-4 w-4" /> Add Period
+                        </button>
+                    </form>
+
+                    <div className="space-y-2">
+                        {blackoutDates.map(date => (
+                            <div key={date.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-800/80 border border-slate-700">
+                                <div>
+                                    <div className="text-sm font-medium text-white">{date.reason}</div>
+                                    <div className="text-xs text-slate-400">{new Date(date.start_date).toLocaleDateString()} - {new Date(date.end_date).toLocaleDateString()}</div>
+                                </div>
+                                <button onClick={() => handleDeleteBlackout(date.id)} className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg">
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ))}
+                        {blackoutDates.length === 0 && (
+                            <div className="text-sm text-slate-500 text-center py-4">No active blackout dates.</div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

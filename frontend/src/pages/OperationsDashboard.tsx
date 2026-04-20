@@ -3,6 +3,7 @@ import { Plane, Plus, Wrench, Clock, CalendarCheck, Edit2, Trash2 } from 'lucide
 import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
+import { AssetImageManager } from '@/components/ui/AssetImageManager';
 import type { Column } from '@/components/ui/DataTable';
 import type { UnifiedAsset } from '@/types';
 
@@ -44,7 +45,16 @@ export function OperationsDashboard() {
             header: 'Asset Name',
             render: (row) => <span className="font-medium text-white">{row.name}</span>,
         },
-        { key: 'serial_number', header: 'Serial Number' },
+        { 
+            key: 'serial_number', 
+            header: 'S/N & Ref',
+            render: (row) => (
+                <div className="flex flex-col">
+                    <span>{row.serial_number}</span>
+                    {row.reference_number && <span className="text-xs text-slate-500">{row.reference_number}</span>}
+                </div>
+            )
+        },
         { 
             key: 'model', 
             header: 'Specs',
@@ -112,10 +122,9 @@ export function OperationsDashboard() {
                                     setEditingId(row.id);
                                     setFormData({
                                         name: row.name, model: row.model, serial_number: row.serial_number,
-                                        status: row.status, department_id: row.department_id,
-                                        total_flight_hours: row.total_flight_hours, notes: row.notes,
-                                        cycle_count: 0,
-                                        type: '',
+                                        reference_number: row.reference_number || '', status: row.status, 
+                                        department_id: row.department_id, total_flight_hours: row.total_flight_hours, 
+                                        notes: row.notes, cycle_count: 0, type: '',
                                     });
                                     setAssetType('drone');
                                     setModalOpen(true);
@@ -154,12 +163,14 @@ export function OperationsDashboard() {
     const [modalOpen, setModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [assetType, setAssetType] = useState<'drone' | 'battery' | 'accessory'>('drone');
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
 
     // Form State
     const [formData, setFormData] = useState<any>({
         name: '',
         model: '',
         serial_number: '',
+        reference_number: '',
         status: 'available',
         department_id: null,
         total_flight_hours: 0,
@@ -236,13 +247,31 @@ export function OperationsDashboard() {
         try {
             if (editingId) {
                 // Edit only supports drones for now based on current UI
-                const payload = { ...formData, total_flight_hours: Number(formData.total_flight_hours) };
-                await operationService.updateDrone(editingId, payload);
+                const data = new FormData();
+                data.append('name', formData.name);
+                data.append('model', formData.model);
+                data.append('serial_number', formData.serial_number);
+                data.append('reference_number', formData.reference_number || '');
+                data.append('status', formData.status);
+                data.append('total_flight_hours', String(Number(formData.total_flight_hours)));
+                data.append('notes', formData.notes);
+                if (selectedImage) data.append('image', selectedImage);
+
+                await operationService.updateDrone(editingId, data);
                 toast.success('Drone asset updated successfully');
             } else {
                 if (assetType === 'drone') {
-                    const payload = { ...formData, total_flight_hours: Number(formData.total_flight_hours) };
-                    await operationService.createDrone(payload);
+                    const data = new FormData();
+                    data.append('name', formData.name);
+                    data.append('model', formData.model);
+                    data.append('serial_number', formData.serial_number);
+                    data.append('reference_number', formData.reference_number || '');
+                    data.append('status', formData.status);
+                    data.append('total_flight_hours', String(Number(formData.total_flight_hours)));
+                    data.append('notes', formData.notes);
+                    if (selectedImage) data.append('image', selectedImage);
+
+                    await operationService.createDrone(data);
                 } else if (assetType === 'battery') {
                     await operationService.createBattery({
                         name: formData.name,
@@ -271,10 +300,12 @@ export function OperationsDashboard() {
     };
 
     const resetForm = () => {
+        setSelectedImage(null);
         setFormData({
             name: '',
             model: '',
             serial_number: '',
+            reference_number: '',
             status: 'available',
             department_id: null,
             total_flight_hours: 0,
@@ -317,10 +348,11 @@ export function OperationsDashboard() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {[
                     { label: 'Total Assets', value: assets.length, color: 'text-white' },
                     { label: 'Available', value: assets.filter(a => a.status === 'available').length, color: 'text-emerald-400' },
+                    { label: 'Flight Hours', value: assets.reduce((acc, a) => acc + (a.total_flight_hours || 0), 0) + 'h', color: 'text-violet-400' },
                     { label: 'Drones', value: assets.filter(a => a.type === 'drone').length, color: 'text-cyan-400' },
                     { label: 'Batteries', value: assets.filter(a => a.type === 'battery').length, color: 'text-amber-400' },
                 ].map((s) => (
@@ -414,10 +446,16 @@ export function OperationsDashboard() {
                         </div>
 
                         {assetType === 'drone' && (
-                            <div>
-                                <label className="mb-2 block text-sm font-medium text-slate-200">Total Flight Hours</label>
-                                <input type="number" min="0" step="0.1" value={formData.total_flight_hours} onChange={e => setFormData({ ...formData, total_flight_hours: parseFloat(e.target.value) || 0 })} placeholder="e.g. 150.5" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
-                            </div>
+                            <>
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium text-slate-200">Reference Number</label>
+                                    <input type="text" value={formData.reference_number} onChange={e => setFormData({ ...formData, reference_number: e.target.value })} placeholder="e.g. IFDC-D-01" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                                </div>
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium text-slate-200">Total Flight Hours</label>
+                                    <input type="number" min="0" step="0.1" value={formData.total_flight_hours} onChange={e => setFormData({ ...formData, total_flight_hours: parseFloat(e.target.value) || 0 })} placeholder="e.g. 150.5" className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
+                                </div>
+                            </>
                         )}
 
                         {assetType === 'battery' && (
@@ -439,6 +477,22 @@ export function OperationsDashboard() {
                             <label className="mb-2 block text-sm font-medium text-slate-200">Inventory Notes</label>
                             <input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Any additional information..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
                         </div>
+
+                        {assetType === 'drone' && (
+                            <div className="sm:col-span-2">
+                                <AssetImageManager
+                                    imageUrl={editingId ? (assets.find(a => a.id === editingId)?.image_url || null) : null}
+                                    assetName={formData.name || 'Drone'}
+                                    onDelete={async () => {
+                                        if (editingId) {
+                                            await operationService.deleteDroneImage(editingId);
+                                            fetchAssets();
+                                        }
+                                    }}
+                                    onUploadChange={(file) => setSelectedImage(file)}
+                                />
+                            </div>
+                        )}
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                         <button type="button" onClick={() => setModalOpen(false)} className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm text-slate-400 hover:bg-slate-800">Cancel</button>

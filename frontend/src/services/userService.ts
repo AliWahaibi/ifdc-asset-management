@@ -51,4 +51,19 @@ export const userService = {
     updateUserStatus: async (id: string, status: string): Promise<void> => {
         await apiClient.patch(`/users/${id}/status`, { status });
     },
+
+    // Delete a user document
+    deleteDocument: async (userId: string, docId: string): Promise<void> => {
+        await apiClient.delete(`/users/${userId}/documents/${docId}`);
+    },
+
+    // Replace a user document
+    replaceDocument: async (userId: string, docId: string, file: File): Promise<any> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await apiClient.put(`/users/${userId}/documents/${docId}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
 };

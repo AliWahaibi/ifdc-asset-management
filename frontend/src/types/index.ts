@@ -1,6 +1,6 @@
 // ===== Enums =====
 
-export type UserRole = 'super_admin' | 'manager' | 'team_leader' | 'employee';
+export type UserRole = 'super_admin' | 'manager' | 'team_leader' | 'employee' | 'hr' | 'ceo';
 
 export type AssetStatus = 'available' | 'in_use' | 'maintenance' | 'retired' | 'reserved';
 
@@ -62,6 +62,7 @@ export interface DroneAsset {
     name: string;
     model: string;
     serial_number: string;
+    reference_number?: string;
     status: AssetStatus;
     department_id: string | null;
     department?: Department;
@@ -69,6 +70,7 @@ export interface DroneAsset {
     last_maintenance_date: string | null;
     next_maintenance_date: string | null;
     notes: string;
+    image_url?: string;
     created_at: string;
     updated_at: string;
 }
@@ -79,6 +81,7 @@ export interface UnifiedAsset {
     model?: string;
     type: 'drone' | 'battery' | 'accessory';
     serial_number: string;
+    reference_number?: string;
     status: AssetStatus;
     department_id: string | null;
     notes: string;
@@ -142,6 +145,7 @@ export interface RndAsset {
     specifications: Record<string, unknown>;
     is_classified: boolean;
     notes: string;
+    image_url?: string;
     created_at: string;
     updated_at: string;
 }
@@ -209,6 +213,8 @@ export interface LeaveRequest {
     user?: User;
     start_date: string;
     end_date: string;
+    leave_type: 'annual' | 'sick' | 'emergency' | 'special';
+    special_leave_reason?: string;
     status: LeaveStatus;
     total_days: number;
     reason: string;
@@ -222,6 +228,7 @@ export interface VehicleAsset {
     id: string;
     name: string;
     license_plate: string;
+    reference_number?: string;
     status: string;
     department_id: string | null;
     mileage: number;
@@ -245,8 +252,10 @@ export interface VehicleImage {
 export interface LeaveBalance {
     user_id: string;
     annual_balance: number;
-    used_days: number;
-    remaining_days: number;
+    used_annual: number;
+    remaining_annual: number;
+    used_sick: number;
+    max_sick: number;
 }
 
 export interface AdmissionAsset {

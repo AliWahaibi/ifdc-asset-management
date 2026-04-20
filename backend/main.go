@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"ifdc-backend/cmd/server"
 	"ifdc-backend/internal/database"
@@ -49,6 +50,7 @@ func main() {
 		&models.AdmissionAsset{},
 		&models.UserDocument{},
 		&models.LeaveRequest{},
+		&models.BlackoutDate{},
 		&models.ReferenceSequence{},
 		&models.VehicleImage{},
 	)
@@ -60,7 +62,31 @@ func main() {
 	database.SeedAdminUser()
 	// database.SeedUsers()
 
+	// Start Background Workers
+	go StartLeaveConversionWorker()
+
 	server.Start()
+}
+
+func StartLeaveConversionWorker() {
+	ticker := time.NewTicker(24 * time.Hour)
+	for {
+		log.Println("Running Background Worker: Sick-to-Annual Leave Auto-Conversion")
+		// Find sick leaves older than 7 days without attachments
+		sevenDaysAgo := time.Now().Add(-7 * 24 * time.Hour)
+		
+		var leaves []models.LeaveRequest
+		database.DB.Where("leave_type = ? AND attachment_url = ? AND created_at <= ?", "sick", "", sevenDaysAgo).Find(&leaves)
+
+		for _, leave := range leaves {
+			leave.LeaveType = "annual"
+			leave.ManagerComment = leave.ManagerComment + "\n[SYSTEM AUTO-CONVERTED]: Sick to Annual due to missing certificates within 7 days."
+			database.DB.Save(&leave)
+			log.Printf("Auto-converted Leave %s to Annual", leave.ID)
+		}
+
+		<-ticker.C
+	}
 }
 
 func ForceSeedAdmin(db *gorm.DB) {

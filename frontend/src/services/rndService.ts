@@ -28,18 +28,26 @@ export const rndService = {
         return response.data;
     },
 
-    createAsset: async (data: CreateRndAssetData): Promise<RndAsset> => {
-        const response = await apiClient.post<RndAsset>('/rnd/assets', data);
+    createAsset: async (data: FormData): Promise<RndAsset> => {
+        const response = await apiClient.post<RndAsset>('/rnd/assets', data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     },
 
-    updateAsset: async (id: string, data: UpdateRndAssetData): Promise<RndAsset> => {
-        const response = await apiClient.put<RndAsset>(`/rnd/assets/${id}`, data);
+    updateAsset: async (id: string, data: FormData): Promise<RndAsset> => {
+        const response = await apiClient.put<RndAsset>(`/rnd/assets/${id}`, data, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         return response.data;
     },
 
     deleteAsset: async (id: string): Promise<void> => {
         await apiClient.delete(`/rnd/assets/${id}`);
+    },
+
+    deleteImage: async (id: string): Promise<void> => {
+        await apiClient.delete(`/rnd/assets/${id}/image`);
     },
 
     getUniqueTypes: async (): Promise<{ drone_models: string[], accessory_types: string[], rnd_asset_types: string[] }> => {

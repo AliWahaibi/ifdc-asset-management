@@ -71,6 +71,9 @@ func SetupRouter() *gin.Engine {
 			users.PATCH("/:id/status", handlers.UpdateUserStatus)
 			users.DELETE("/:id", handlers.DeleteUser)
 			users.GET("/profile", handlers.GetProfile)
+			// Phase 2: Document CRUD
+			users.DELETE("/:id/documents/:docId", handlers.DeleteUserDocument)
+			users.PUT("/:id/documents/:docId", handlers.ReplaceUserDocument)
 		}
 
 		// Reservations workflow
@@ -98,6 +101,7 @@ func SetupRouter() *gin.Engine {
 			operations.POST("/assignments", handlers.AssignAssets)
 			operations.PUT("/drones/:id", handlers.UpdateDrone)
 			operations.DELETE("/drones/:id", handlers.DeleteDrone)
+			operations.DELETE("/drones/:id/image", handlers.DeleteDroneAssetImage)
 			operations.POST("/drones/:id/maintenance/resolve", handlers.ResolveMaintenance)
 		}
 
@@ -110,6 +114,7 @@ func SetupRouter() *gin.Engine {
 			office.POST("/assets", handlers.CreateOfficeAsset)
 			office.PUT("/assets/:id", handlers.UpdateOfficeAsset)
 			office.DELETE("/assets/:id", handlers.DeleteOfficeAsset)
+			office.DELETE("/assets/:id/image", handlers.DeleteOfficeAssetImage)
 		}
 
 		// R&D group
@@ -120,6 +125,7 @@ func SetupRouter() *gin.Engine {
 			rnd.POST("/assets", handlers.CreateRndAsset)
 			rnd.PUT("/assets/:id", handlers.UpdateRndAsset)
 			rnd.DELETE("/assets/:id", handlers.DeleteRndAsset)
+			rnd.DELETE("/assets/:id/image", handlers.DeleteRndAssetImage)
 		}
 
 		// Vehicles group
@@ -144,6 +150,9 @@ func SetupRouter() *gin.Engine {
 		{
 			settings.GET("", handlers.GetSettings)
 			settings.PUT("", handlers.UpdateSettings)
+			settings.GET("/blackout-dates", handlers.GetBlackoutDates)
+			settings.POST("/blackout-dates", handlers.CreateBlackoutDate)
+			settings.DELETE("/blackout-dates/:id", handlers.DeleteBlackoutDate)
 		}
 
 		// Statistics & Analytics

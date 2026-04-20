@@ -31,19 +31,31 @@ type User struct {
 }
 
 type LeaveRequest struct {
-	ID              string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	UserID          string         `gorm:"type:uuid;not null;index" json:"user_id"`
-	User            User           `gorm:"foreignKey:UserID" json:"user"`
-	StartDate       time.Time      `gorm:"not null" json:"start_date"`
-	EndDate         time.Time      `gorm:"not null" json:"end_date"`
-	Status          string         `gorm:"not null;default:'pending_manager'" json:"status"` // pending_manager, pending_ceo, approved, rejected, cancelled
-	TotalDays       int            `gorm:"not null" json:"total_days"`
-	Reason          string         `json:"reason"`
-	ManagerComment  string         `json:"manager_comment"`
-	CEOComment      string         `json:"ceo_comment"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                 string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	UserID             string         `gorm:"type:uuid;not null;index" json:"user_id"`
+	User               User           `gorm:"foreignKey:UserID" json:"user"`
+	LeaveType          string         `gorm:"not null;default:'annual'" json:"leave_type"` // annual, sick, emergency, special
+	SpecialLeaveReason string         `json:"special_leave_reason"`
+	StartDate          time.Time      `gorm:"not null" json:"start_date"`
+	EndDate            time.Time      `gorm:"not null" json:"end_date"`
+	Status             string         `gorm:"not null;default:'pending_manager'" json:"status"` // pending_manager, pending_ceo, approved, rejected, cancelled
+	TotalDays          int            `gorm:"not null" json:"total_days"`
+	Reason             string         `json:"reason"`
+	AttachmentURL      string         `json:"attachment_url"`
+	ManagerComment     string         `json:"manager_comment"`
+	CEOComment         string         `json:"ceo_comment"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+type BlackoutDate struct {
+	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	StartDate time.Time `gorm:"not null" json:"start_date"`
+	EndDate   time.Time `gorm:"not null" json:"end_date"`
+	Reason    string    `gorm:"not null" json:"reason"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ReferenceSequence struct {
@@ -68,12 +80,14 @@ type DroneAsset struct {
 	Name                string         `gorm:"not null" json:"name"`
 	Model               string         `gorm:"not null" json:"model"`
 	SerialNumber        string         `gorm:"uniqueIndex;not null" json:"serial_number"`
+	ReferenceNumber     string         `json:"reference_number"`
 	Status              string         `gorm:"not null;default:'Available'" json:"status"` // Available, In Use, Maintenance, Reserved
 	DepartmentID        *string        `gorm:"type:uuid" json:"department_id"`
 	TotalFlightHours    float64        `gorm:"default:0" json:"total_flight_hours"`
 	LastMaintenanceDate *time.Time     `json:"last_maintenance_date"`
 	NextMaintenanceDate *time.Time     `json:"next_maintenance_date"`
 	Notes               string         `json:"notes"`
+	ImageURL            string         `json:"image_url"`
 	CreatedAt           time.Time      `json:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at"`
 	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
@@ -108,6 +122,7 @@ type RndAsset struct {
 	Specifications  string         `gorm:"type:jsonb" json:"specifications"` // Stored as JSONB in PG
 	IsClassified    bool           `gorm:"default:false" json:"is_classified"`
 	ReferenceNumber string         `json:"reference_number"`
+	ImageURL        string         `json:"image_url"`
 	Notes           string         `json:"notes"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
@@ -227,6 +242,7 @@ type VehicleAsset struct {
 	ID           string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
 	Name         string         `gorm:"not null" json:"name"` // e.g. "Toyota Land Cruiser"
 	LicensePlate string         `gorm:"uniqueIndex;not null" json:"license_plate"`
+	ReferenceNumber string      `json:"reference_number"`
 	Status       string         `gorm:"not null;default:'available'" json:"status"` // available, in_use, maintenance, reserved
 	DepartmentID *string        `gorm:"type:uuid" json:"department_id"`
 	Mileage            float64        `gorm:"default:0" json:"mileage"`

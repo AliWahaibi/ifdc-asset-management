@@ -33,6 +33,8 @@ export function LeaveManagement() {
     const [formData, setFormData] = useState({
         start_date: '',
         end_date: '',
+        leave_type: 'annual',
+        special_leave_reason: '',
         reason: ''
     });
 
@@ -63,7 +65,7 @@ export function LeaveManagement() {
             await leaveService.createLeave(formData);
             toast.success('Leave request submitted successfully');
             setModalOpen(false);
-            setFormData({ start_date: '', end_date: '', reason: '' });
+            setFormData({ start_date: '', end_date: '', leave_type: 'annual', special_leave_reason: '', reason: '' });
             fetchData();
         } catch (error: any) {
             toast.error(error.response?.data?.error || 'Failed to submit request');
@@ -98,6 +100,20 @@ export function LeaveManagement() {
                 </div>
             )
         }] : []),
+        {
+            key: 'leave_type',
+            header: 'Type',
+            render: (row) => (
+                <span className={`inline-flex items-center rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                    row.leave_type === 'annual' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' :
+                    row.leave_type === 'sick' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                    row.leave_type === 'emergency' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                    'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                }`}>
+                    {row.leave_type}
+                </span>
+            )
+        },
         {
             key: 'start_date',
             header: 'Start Date',
@@ -219,11 +235,11 @@ export function LeaveManagement() {
                         <Clock className="h-16 w-16 text-violet-400" />
                     </div>
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Days Used</p>
-                    <h3 className="text-3xl font-black text-white mt-1">{balance?.used_days || 0} <span className="text-sm font-medium text-slate-400 tracking-normal italic">days</span></h3>
+                    <h3 className="text-3xl font-black text-white mt-1">{balance?.used_annual || 0} <span className="text-sm font-medium text-slate-400 tracking-normal italic">days</span></h3>
                     <div className="mt-4 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                         <div 
                             className="h-full bg-violet-500 transition-all duration-1000"
-                            style={{ width: `${((balance?.used_days || 0) / 23) * 100}%` }}
+                            style={{ width: `${((balance?.used_annual || 0) / 30) * 100}%` }}
                         />
                     </div>
                 </div>
@@ -233,9 +249,21 @@ export function LeaveManagement() {
                         <CheckCircle2 className="h-16 w-16 text-emerald-400" />
                     </div>
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Remaining Balance</p>
-                    <h3 className="text-3xl font-black text-emerald-400 mt-1">{balance?.remaining_days ?? '--'} <span className="text-sm font-medium text-slate-400 tracking-normal italic">days</span></h3>
+                    <h3 className="text-3xl font-black text-emerald-400 mt-1">{balance?.remaining_annual ?? '--'} <span className="text-sm font-medium text-slate-400 tracking-normal italic">days</span></h3>
                     <div className="mt-4 flex items-center gap-2 text-[10px] text-emerald-400/70">
                         Available for request
+                    </div>
+                </div>
+
+                {/* Sick Leave Display */}
+                <div className="glass-panel p-6 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                        <AlertCircle className="h-16 w-16 text-amber-500" />
+                    </div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Sick Leave Used</p>
+                    <h3 className="text-3xl font-black text-white mt-1">{balance?.used_sick || 0} <span className="text-sm font-medium text-slate-400 tracking-normal italic">days</span></h3>
+                    <div className="mt-4 flex items-center justify-between text-[10px] text-amber-500/70">
+                        <span>Includes weekends</span>
                     </div>
                 </div>
             </div>
@@ -274,6 +302,44 @@ export function LeaveManagement() {
                 size="md"
             >
                 <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-400 mb-2">Leave Type</label>
+                        <select
+                            required
+                            value={formData.leave_type}
+                            onChange={e => setFormData({ ...formData, leave_type: e.target.value })}
+                            className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none focus:border-cyan-500 transition-all text-sm"
+                        >
+                            <option value="annual">Annual Leave</option>
+                            <option value="sick">Sick Leave</option>
+                            <option value="emergency">Emergency Leave</option>
+                            <option value="special">Special Leave</option>
+                        </select>
+                    </div>
+
+                    {formData.leave_type === 'special' && (
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-400 mb-2">Special Reason Classification</label>
+                            <select
+                                required
+                                value={formData.special_leave_reason}
+                                onChange={e => setFormData({ ...formData, special_leave_reason: e.target.value })}
+                                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none focus:border-cyan-500 transition-all text-sm"
+                            >
+                                <option value="" disabled>Select special classification...</option>
+                                <option value="hajj">Hajj Leave (20 days once)</option>
+                                <option value="marriage">Marriage Leave (3 days once)</option>
+                                <option value="paternity">Paternity Leave (7 days)</option>
+                                <option value="maternity">Maternity Leave (98 days)</option>
+                                <option value="bereavement_family">Bereavement - Immediate Family (3 days)</option>
+                                <option value="bereavement_spouse">Bereavement - Spouse (10 days)</option>
+                                <option value="bereavement_wife_muslim">Wife's Mourning - Muslim (130 days)</option>
+                                <option value="bereavement_wife_nonmuslim">Wife's Mourning - Non Muslim (14 days)</option>
+                                <option value="study_exam">Study/Exam Leave (15 days/yr)</option>
+                            </select>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-slate-400 mb-2">Start Date</label>
@@ -297,13 +363,25 @@ export function LeaveManagement() {
                         </div>
                     </div>
 
-                    {formData.start_date && formData.end_date && (
+                    {formData.leave_type === 'annual' && formData.start_date && (
                         <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-4 flex items-start gap-3">
                             <Info className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
                             <div>
-                                <p className="text-sm font-bold text-white">Oman Weekend Logic Applied</p>
+                                <p className="text-sm font-bold text-white">Annual Leave Notice</p>
                                 <p className="text-xs text-slate-400 mt-1">
-                                    System will automatically skip Friday and Saturday when calculating your balanced days.
+                                    Leaves longer than 15 days require 30 days notice. Shorter leaves require 7 days notice.
+                                    Fridays and Saturdays are excluded from the balance calculation.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    {formData.leave_type === 'sick' && formData.start_date && (
+                        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
+                            <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-sm font-bold text-amber-400">Sick Leave Calculation</p>
+                                <p className="text-xs text-amber-400/80 mt-1">
+                                    Sick leaves are calculated including weekends (calendar days) per Oman Labour Law.
                                 </p>
                             </div>
                         </div>

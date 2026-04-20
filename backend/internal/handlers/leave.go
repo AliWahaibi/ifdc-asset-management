@@ -12,9 +12,11 @@ import (
 )
 
 type CreateLeaveRequestInput struct {
-	StartDate string `json:"start_date" binding:"required"`
-	EndDate   string `json:"end_date" binding:"required"`
-	Reason    string `json:"reason"`
+	StartDate          string `json:"start_date" binding:"required"`
+	EndDate            string `json:"end_date" binding:"required"`
+	Reason             string `json:"reason"`
+	LeaveType          string `json:"leave_type" binding:"required"` // annual, sick, emergency, special
+	SpecialLeaveReason string `json:"special_leave_reason"`
 }
 
 // CalculateWorkingDays calculates working days between start and end date,
@@ -58,25 +60,83 @@ func CreateLeaveRequest(c *gin.Context) {
 		return
 	}
 
+	// Prevent overlaps with blackout dates for annual leaves
+	if input.LeaveType == "annual" {
+		var blackoutConflicts int64
+		database.DB.Model(&models.BlackoutDate{}).
+			Where("(start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?)",
+				endDate, startDate, endDate, startDate, startDate, endDate).
+			Count(&blackoutConflicts)
+		if blackoutConflicts > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Annual leave cannot be requested during a blackout period."})
+			return
+		}
+	}
+
 	totalDays := CalculateWorkingDays(startDate, endDate)
+	
+	// Sick leave includes weekends
+	if input.LeaveType == "sick" {
+		totalDays = int(endDate.Sub(startDate).Hours()/24) + 1
+	}
+
 	if totalDays == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Selected range only contains weekends"})
 		return
 	}
 
+	// Validation Rules
+	now := time.Now()
+	daysAhead := int(startDate.Sub(now).Hours() / 24)
+
+	switch input.LeaveType {
+	case "annual":
+		if totalDays > 15 && daysAhead < 30 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Annual leaves longer than 15 days require a 30-day advance notice."})
+			return
+		}
+		if totalDays < 3 && daysAhead < 7 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Annual leaves shorter than 3 days require a 7-day advance notice."})
+			return
+		}
+
+		// Probation period check
+		var requestUser models.User
+		database.DB.First(&requestUser, "id = ?", userID)
+		if now.Sub(requestUser.CreatedAt).Hours()/24 < 180 { // 6 months approximation
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Annual leave is restricted during the first 6 months of employment."})
+			return
+		}
+
+	case "emergency":
+		now := time.Now()
+		startOfYear := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+		var usedEmergency int64
+		database.DB.Model(&models.LeaveRequest{}).
+			Where("user_id = ? AND leave_type = ? AND status = ? AND created_at >= ?", userID, "emergency", "approved", startOfYear).
+			Count(&usedEmergency)
+
+		if usedEmergency+int64(totalDays) > 6 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Emergency leave is capped at 6 days per year."})
+			return
+		}
+	}
+
 	// Initial Status Logic
 	status := "pending_manager"
-	if userRole == "manager" || userRole == "super_admin" {
+	if userRole == "manager" || userRole == "ceo" || userRole == "super_admin" {
 		status = "pending_ceo"
 	}
 
 	leave := models.LeaveRequest{
-		UserID:    userID,
-		StartDate: startDate,
-		EndDate:   endDate,
-		Status:    status,
-		TotalDays: totalDays,
-		Reason:    input.Reason,
+		UserID:             userID,
+		LeaveType:          input.LeaveType,
+		SpecialLeaveReason: input.SpecialLeaveReason,
+		StartDate:          startDate,
+		EndDate:            endDate,
+		Status:             status,
+		TotalDays:          totalDays,
+		Reason:             input.Reason,
 	}
 
 	if err := database.DB.Create(&leave).Error; err != nil {
@@ -194,21 +254,85 @@ func GetLeaveBalance(c *gin.Context) {
 		userID = c.GetString("userID")
 	}
 
-	var totalApproved int64
+	now := time.Now()
+	var totalAnnual int64
 	database.DB.Model(&models.LeaveRequest{}).
-		Where("user_id = ? AND status = 'approved'", userID).
-		Select("SUM(total_days)").
-		Row().Scan(&totalApproved)
+		Where("user_id = ? AND leave_type = 'annual' AND status = 'approved' AND extract(year from start_date) = ?", userID, now.Year()).
+		Select("COALESCE(SUM(total_days), 0)").
+		Row().Scan(&totalAnnual)
 
-	balance := 23 - totalApproved
-	if balance < 0 {
-		balance = 0
+	var totalSick int64
+	database.DB.Model(&models.LeaveRequest{}).
+		Where("user_id = ? AND leave_type = 'sick' AND status = 'approved' AND extract(year from start_date) = ?", userID, now.Year()).
+		Select("COALESCE(SUM(total_days), 0)").
+		Row().Scan(&totalSick)
+
+	annualBalance := int64(30) - totalAnnual
+	if annualBalance < 0 {
+		annualBalance = 0
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user_id":          userID,
-		"annual_balance":   23,
-		"used_days":        totalApproved,
-		"remaining_days":   balance,
+		"user_id":        userID,
+		"annual_balance": 30, // 30 Calendar Days
+		"used_annual":    totalAnnual,
+		"remaining_annual": annualBalance,
+		"used_sick":      totalSick,
+		"max_sick":       182,
 	})
+}
+
+// GetBlackoutDates retrieves all active blackout dates
+func GetBlackoutDates(c *gin.Context) {
+	var dates []models.BlackoutDate
+	if err := database.DB.Order("start_date asc").Find(&dates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch blackout dates"})
+		return
+	}
+	c.JSON(http.StatusOK, dates)
+}
+
+// CreateBlackoutDate adds a new blackout period
+func CreateBlackoutDate(c *gin.Context) {
+	var input struct {
+		StartDate string `json:"start_date" binding:"required"`
+		EndDate   string `json:"end_date" binding:"required"`
+		Reason    string `json:"reason" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	startDate, _ := time.Parse("2006-01-02", input.StartDate)
+	endDate, _ := time.Parse("2006-01-02", input.EndDate)
+
+	if endDate.Before(startDate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "End date cannot be before start date"})
+		return
+	}
+
+	blackout := models.BlackoutDate{
+		StartDate: startDate,
+		EndDate:   endDate,
+		Reason:    input.Reason,
+	}
+
+	if err := database.DB.Create(&blackout).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create blackout date"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, blackout)
+}
+
+// DeleteBlackoutDate removes a blackout period
+func DeleteBlackoutDate(c *gin.Context) {
+	id := c.Param("id")
+	if err := database.DB.Delete(&models.BlackoutDate{}, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete blackout date"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Blackout date deleted successfully"})
 }

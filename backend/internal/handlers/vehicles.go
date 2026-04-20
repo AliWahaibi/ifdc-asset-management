@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"fmt"
+	"log"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -93,6 +95,7 @@ func CreateVehicleAsset(c *gin.Context) {
 	departmentID := c.PostForm("department_id")
 	mileageStr := c.PostForm("mileage")
 	notes := c.PostForm("notes")
+	referenceNumber := c.PostForm("reference_number")
 	rentStartStr := c.PostForm("rent_start_date")
 	rentEndStr := c.PostForm("rent_end_date")
 	mulkiyaExpiryStr := c.PostForm("mulkiya_expiry_date")
@@ -105,11 +108,12 @@ func CreateVehicleAsset(c *gin.Context) {
 	mileage, _ := strconv.ParseFloat(mileageStr, 64)
 
 	asset := models.VehicleAsset{
-		Name:         strings.TrimSpace(name),
-		LicensePlate: strings.TrimSpace(licensePlate),
-		Status:       "available",
-		Mileage:      mileage,
-		Notes:        strings.TrimSpace(notes),
+		Name:            strings.TrimSpace(name),
+		LicensePlate:    strings.TrimSpace(licensePlate),
+		ReferenceNumber: strings.TrimSpace(referenceNumber),
+		Status:          "available",
+		Mileage:         mileage,
+		Notes:           strings.TrimSpace(notes),
 	}
 
 	if status != "" {
@@ -147,17 +151,25 @@ func CreateVehicleAsset(c *gin.Context) {
 		asset.MulkiyaImageURL = mulkiyaURL
 	}
 
+	// Debug: Log the full payload before DB insert
+	log.Printf("[VEHICLE CREATE] Payload: Name=%q LicensePlate=%q Ref=%q Status=%q Mileage=%f",
+		asset.Name, asset.LicensePlate, asset.ReferenceNumber, asset.Status, asset.Mileage)
+
 	tx := database.DB.Begin()
 
 	if err := tx.Create(&asset).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create vehicle asset"})
+		log.Printf("[VEHICLE CREATE ERROR] DB insert failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create vehicle asset: %v", err)})
 		return
 	}
 
-	// Handle Inspection Images (up to 10)
+	// Handle Inspection Images (up to 10) — guard against nil form
 	form, _ := c.MultipartForm()
-	files := form.File["inspection_images"]
+	var files []*multipart.FileHeader
+	if form != nil && form.File != nil {
+		files = form.File["inspection_images"]
+	}
 	count := 0
 	for _, fileHeader := range files {
 		if count >= 10 {
@@ -210,6 +222,7 @@ func UpdateVehicleAsset(c *gin.Context) {
 	// Update fields
 	asset.Name = updateData.Name
 	asset.LicensePlate = updateData.LicensePlate
+	asset.ReferenceNumber = updateData.ReferenceNumber
 	asset.Status = updateData.Status
 	asset.Mileage = updateData.Mileage
 	asset.Notes = updateData.Notes

@@ -46,6 +46,10 @@ export const officeService = {
     deleteAsset: async (id: string): Promise<void> => {
         await apiClient.delete(`/office/assets/${id}`);
     },
+
+    deleteImage: async (id: string): Promise<void> => {
+        await apiClient.delete(`/office/assets/${id}/image`);
+    },
     getCategories: async (): Promise<any[]> => {
         const response = await apiClient.get<any[]>('/office/categories');
         return response.data;

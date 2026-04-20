@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { userService } from '@/services/userService';
-import { Shield, UploadCloud, Save, User as UserIcon, ArrowLeft, Monitor, Briefcase, AlertCircle, MapPin, Heart, Phone, Building2, Download, Eye } from 'lucide-react';
+import { Shield, UploadCloud, Save, User as UserIcon, ArrowLeft, Monitor, Briefcase, AlertCircle, MapPin, Heart, Phone, Building2, Download, Eye, Trash2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 
 export function UserProfile() {
     const { id } = useParams<{ id: string }>();
@@ -33,8 +34,47 @@ export function UserProfile() {
         vehicle_license: null as File | null,
         assurance_card: null as File | null,
         drone_pilot_certificate: null as File | null,
-        other_certificate: null as File | null,
+        other_certificate: null as FileList | null,
     });
+
+    const [viewerState, setViewerState] = useState({
+        isOpen: false,
+        url: null as string | null,
+        title: ''
+    });
+
+    const handleDeleteDocument = async (docId: string) => {
+        if (!confirm('Are you sure you want to delete this document?')) return;
+        try {
+            await userService.deleteDocument(viewedUser.id, docId);
+            toast.success('Document deleted');
+            // Refresh
+            window.location.reload();
+        } catch (err) {
+            toast.error('Failed to delete document');
+        }
+    };
+
+    const handleReplaceDocument = async (docId: string) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.pdf,image/*';
+        input.onchange = async (e: any) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setLoading(true);
+            try {
+                await userService.replaceDocument(viewedUser.id, docId, file);
+                toast.success('Document replaced');
+                window.location.reload();
+            } catch (err) {
+                toast.error('Failed to replace document');
+            } finally {
+                setLoading(false);
+            }
+        };
+        input.click();
+    };
 
     useEffect(() => {
         const loadProfile = async () => {
@@ -116,7 +156,11 @@ export function UserProfile() {
         if (formData.vehicle_license) uploadData.append('vehicle_license', formData.vehicle_license);
         if (formData.assurance_card) uploadData.append('assurance_card', formData.assurance_card);
         if (formData.drone_pilot_certificate) uploadData.append('drone_pilot_certificate', formData.drone_pilot_certificate);
-        if (formData.other_certificate) uploadData.append('other_certificate', formData.other_certificate);
+        if (formData.other_certificate) {
+            Array.from(formData.other_certificate).forEach(file => {
+                uploadData.append('other_certificate', file);
+            });
+        }
 
         try {
             await userService.updateUser(viewedUser.id, uploadData);
@@ -301,9 +345,10 @@ export function UserProfile() {
                     {/* File Display & Action Grid */}
                     <div className="grid grid-cols-1 gap-4 mb-8">
                         {[
-                            { label: 'CV / Resume', url: viewedUser.cv_url, field: 'cv_file' },
-                            { label: 'National ID (Oman)', url: viewedUser.id_card_url, field: 'id_card_file' },
+                            { id: 'cv', label: 'CV / Resume', url: viewedUser.cv_url, field: 'cv_file' },
+                            { id: 'id_card', label: 'National ID (Oman)', url: viewedUser.id_card_url, field: 'id_card_file' },
                             ...(viewedUser.documents || []).map((d: any) => ({
+                                id: d.id,
                                 label: d.type.replace(/_/g, ' ').toUpperCase(),
                                 url: d.file_url,
                                 field: d.type
@@ -320,23 +365,43 @@ export function UserProfile() {
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <a 
-                                        href={`http://localhost:8080${doc.url}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
+                                    <button 
+                                        type="button"
+                                        onClick={() => setViewerState({ isOpen: true, url: doc.url, title: doc.label })}
                                         className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all shadow-sm"
                                         title="View Document"
                                     >
                                         <Eye className="h-4 w-4" />
-                                    </a>
+                                    </button>
                                     <a 
-                                        href={`http://localhost:8080${doc.url}`} 
+                                        href={doc.url} 
                                         download
+                                        onClick={(e) => e.stopPropagation()}
                                         className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all shadow-sm"
                                         title="Download"
                                     >
                                         <Download className="h-4 w-4" />
                                     </a>
+                                    {canEdit && (
+                                        <>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleReplaceDocument(doc.id)}
+                                                className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                                                title="Replace Document"
+                                            >
+                                                <RefreshCw className="h-4 w-4" />
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleDeleteDocument(doc.id)}
+                                                className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                                                title="Delete Document"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -362,7 +427,7 @@ export function UserProfile() {
                             {/* Phase 1 Expansion: New Documents */}
                             <div className="rounded-xl border border-dashed border-slate-600 bg-slate-800/30 p-4 transition-all hover:bg-slate-800/50">
                                 <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-200">
-                                    Vehicle License (Mulkiya)
+                                    License
                                 </label>
                                 <input type="file" accept=".pdf,image/*" onChange={e => setFormData({ ...formData, vehicle_license: e.target.files?.[0] || null })} className="w-full text-[11px] text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-700/50 file:px-3 file:py-1.5 file:text-slate-300" />
                             </div>
@@ -380,9 +445,9 @@ export function UserProfile() {
                             </div>
                             <div className="rounded-xl border border-dashed border-slate-600 bg-slate-800/30 p-4 transition-all hover:bg-slate-800/50">
                                 <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-200">
-                                    Other Certificate
+                                    Other Certificate (Multiple)
                                 </label>
-                                <input type="file" accept=".pdf,image/*" onChange={e => setFormData({ ...formData, other_certificate: e.target.files?.[0] || null })} className="w-full text-[11px] text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-700/50 file:px-3 file:py-1.5 file:text-slate-300" />
+                                <input type="file" multiple accept=".pdf,image/*" onChange={e => setFormData({ ...formData, other_certificate: e.target.files })} className="w-full text-[11px] text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-700/50 file:px-3 file:py-1.5 file:text-slate-300 cursor-pointer hover:file:bg-slate-700/80 transition-all font-medium" />
                             </div>
                         </div>
                     )}
@@ -462,6 +527,12 @@ export function UserProfile() {
                     )}
                 </div>
             )}
+            <DocumentViewerModal 
+                isOpen={viewerState.isOpen}
+                onClose={() => setViewerState({ ...viewerState, isOpen: false })}
+                documentUrl={viewerState.url}
+                documentTitle={viewerState.title}
+            />
         </div>
     );
 }

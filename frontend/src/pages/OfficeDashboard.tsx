@@ -5,6 +5,7 @@ import Select from 'react-select';
 import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
+import { AssetImageManager } from '@/components/ui/AssetImageManager';
 import type { Column } from '@/components/ui/DataTable';
 import type { OfficeAsset } from '@/types';
 
@@ -334,22 +335,17 @@ export function OfficeDashboard() {
                         <div><label className="mb-2 block text-sm font-medium text-slate-200">Warranty Expiry</label><input type="date" value={formData.warranty_expiry || ''} onChange={e => setFormData({ ...formData, warranty_expiry: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>
                         
                         <div className="sm:col-span-2">
-                            <label className="mb-2 block text-sm font-medium text-slate-200">Asset Image</label>
-                            <div className="flex items-center gap-4">
-                                <input 
-                                    type="file" 
-                                    accept="image/*" 
-                                    onChange={e => setSelectedImage(e.target.files?.[0] || null)}
-                                    className="block w-full text-sm text-slate-400 file:mr-4 file:rounded-xl file:border-0 file:bg-violet-500/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-violet-400 hover:file:bg-violet-500/20"
-                                />
-                                {editingId && assets.find(a => a.id === editingId)?.image_url && (
-                                    <img 
-                                        src={`${import.meta.env.VITE_API_URL}${assets.find(a => a.id === editingId)?.image_url}`} 
-                                        alt="Current" 
-                                        className="h-12 w-12 rounded-lg object-cover ring-2 ring-white/10"
-                                    />
-                                )}
-                            </div>
+                            <AssetImageManager
+                                imageUrl={editingId ? (assets.find(a => a.id === editingId)?.image_url || null) : null}
+                                assetName={formData.name || 'Office Asset'}
+                                onDelete={async () => {
+                                    if (editingId) {
+                                        await officeService.deleteImage(editingId);
+                                        fetchAssets();
+                                    }
+                                }}
+                                onUploadChange={(file) => setSelectedImage(file)}
+                            />
                         </div>
 
                         <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-200">Notes / Details</label><input type="text" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Location, specs..." className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500" /></div>

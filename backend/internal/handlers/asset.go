@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -238,33 +237,43 @@ func GetRndAssets(c *gin.Context) {
 
 // CreateDrone godoc
 func CreateDrone(c *gin.Context) {
-	var input struct {
-		Name             string  `json:"name" binding:"required,min=2,max=255"`
-		Model            string  `json:"model" binding:"required,min=2,max=255"`
-		SerialNumber     string  `json:"serial_number" binding:"required,min=2,max=100"`
-		Status           string  `json:"status"`
-		DepartmentID     *string `json:"department_id"`
-		TotalFlightHours float64 `json:"total_flight_hours"`
-		Notes            string  `json:"notes" binding:"max=2000"`
-	}
+	name := c.PostForm("name")
+	modelStr := c.PostForm("model")
+	serialNumber := c.PostForm("serial_number")
+	referenceNumber := c.PostForm("reference_number")
+	status := c.PostForm("status")
+	departmentID := c.PostForm("department_id")
+	hoursStr := c.PostForm("total_flight_hours")
+	notes := c.PostForm("notes")
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if name == "" || modelStr == "" || serialNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name, model, and serial_number are required"})
 		return
 	}
 
+	hours, _ := strconv.ParseFloat(hoursStr, 64)
+
 	drone := models.DroneAsset{
-		Name:             input.Name,
-		Model:            input.Model,
-		SerialNumber:     input.SerialNumber,
+		Name:             name,
+		Model:            modelStr,
+		SerialNumber:     serialNumber,
+		ReferenceNumber:  referenceNumber,
 		Status:           "Available",
-		DepartmentID:     input.DepartmentID,
-		TotalFlightHours: input.TotalFlightHours,
-		Notes:            input.Notes,
+		TotalFlightHours: hours,
+		Notes:            notes,
 	}
 
-	if input.Status != "" {
-		drone.Status = input.Status
+	if status != "" {
+		drone.Status = status
+	}
+	if departmentID != "" {
+		drone.DepartmentID = &departmentID
+	}
+
+	// Handle Image Upload
+	imageURL, err := saveUploadedFile(c, "image", "uploads/assets", []string{"image/jpeg", "image/png", "image/webp"})
+	if err == nil {
+		drone.ImageURL = imageURL
 	}
 
 	// XSS Sanitization
@@ -272,6 +281,7 @@ func CreateDrone(c *gin.Context) {
 	drone.Name = p.Sanitize(drone.Name)
 	drone.Model = p.Sanitize(drone.Model)
 	drone.SerialNumber = p.Sanitize(drone.SerialNumber)
+	drone.Notes = p.Sanitize(drone.Notes)
 
 	if err := database.DB.Create(&drone).Error; err != nil {
 		if database.IsUniqueConstraintError(err) {
@@ -357,37 +367,48 @@ func CreateOfficeAsset(c *gin.Context) {
 
 // CreateRndAsset godoc
 func CreateRndAsset(c *gin.Context) {
-	var input struct {
-		Name            string                 `json:"name" binding:"required,min=2,max=255"`
-		AssetType       string                 `json:"asset_type" binding:"required"`
-		SerialNumber    string                 `json:"serial_number" binding:"required,min=2,max=100"`
-		Status          string                 `json:"status" binding:"required"`
-		DepartmentID    *string                `json:"department_id"`
-		Specifications  map[string]interface{} `json:"specifications"`
-		IsClassified    bool                   `json:"is_classified"`
-		ReferenceNumber string                 `json:"reference_number"`
-		Notes           string                 `json:"notes" binding:"max=2000"`
-	}
+	name := c.PostForm("name")
+	assetType := c.PostForm("asset_type")
+	serialNumber := c.PostForm("serial_number")
+	referenceNumber := c.PostForm("reference_number")
+	status := c.PostForm("status")
+	departmentID := c.PostForm("department_id")
+	specsStr := c.PostForm("specifications")
+	isClassifiedStr := c.PostForm("is_classified")
+	notes := c.PostForm("notes")
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if name == "" || assetType == "" || serialNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name, asset_type, and serial_number are required"})
 		return
 	}
 
 	asset := models.RndAsset{
-		Name:            input.Name,
-		AssetType:       input.AssetType,
-		SerialNumber:    input.SerialNumber,
-		Status:          input.Status,
-		DepartmentID:    input.DepartmentID,
-		IsClassified:    input.IsClassified,
-		ReferenceNumber: input.ReferenceNumber,
-		Notes:           input.Notes,
+		Name:            name,
+		AssetType:       assetType,
+		SerialNumber:    serialNumber,
+		ReferenceNumber: referenceNumber,
+		Status:          "available",
+		IsClassified:    isClassifiedStr == "true",
+		Notes:           notes,
 	}
 
-	// Handle JSONB storage
-	specBytes, _ := json.Marshal(input.Specifications)
-	asset.Specifications = string(specBytes)
+	if status != "" {
+		asset.Status = status
+	}
+	if departmentID != "" {
+		asset.DepartmentID = &departmentID
+	}
+	if specsStr != "" {
+		asset.Specifications = specsStr
+	} else {
+		asset.Specifications = "{}"
+	}
+
+	// Handle Image Upload
+	imageURL, err := saveUploadedFile(c, "image", "uploads/assets", []string{"image/jpeg", "image/png", "image/webp"})
+	if err == nil {
+		asset.ImageURL = imageURL
+	}
 
 	// XSS Sanitization
 	p := bluemonday.UGCPolicy()
@@ -411,29 +432,63 @@ func CreateRndAsset(c *gin.Context) {
 // UpdateDrone godoc
 func UpdateDrone(c *gin.Context) {
 	id := c.Param("id")
-	var input map[string]interface{}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
 	var asset models.DroneAsset
 	if err := database.DB.First(&asset, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
 		return
 	}
-	if err := database.DB.Model(&asset).Updates(input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
-		return
-	}
 
-	// Maintenance Threshold Check
-	if hours, ok := input["total_flight_hours"].(float64); ok {
-		var settings models.SystemSetting
-		if err := database.DB.First(&settings).Error; err == nil {
-			if int(hours) >= settings.MaintenanceThresholdHours {
-				database.DB.Model(&asset).Update("status", "Maintenance")
+	// Update fields from PostForm
+	if name := c.PostForm("name"); name != "" {
+		asset.Name = name
+	}
+	if modelStr := c.PostForm("model"); modelStr != "" {
+		asset.Model = modelStr
+	}
+	if serial := c.PostForm("serial_number"); serial != "" {
+		asset.SerialNumber = serial
+	}
+	if ref := c.PostForm("reference_number"); ref != "" {
+		asset.ReferenceNumber = ref
+	}
+	if status := c.PostForm("status"); status != "" {
+		asset.Status = status
+	}
+	if notes := c.PostForm("notes"); notes != "" {
+		asset.Notes = notes
+	}
+	if deptID := c.PostForm("department_id"); deptID != "" {
+		asset.DepartmentID = &deptID
+	}
+	if hoursStr := c.PostForm("total_flight_hours"); hoursStr != "" {
+		if hours, err := strconv.ParseFloat(hoursStr, 64); err == nil {
+			asset.TotalFlightHours = hours
+			// Maintenance Threshold Check
+			var settings models.SystemSetting
+			if err := database.DB.First(&settings).Error; err == nil {
+				if int(hours) >= settings.MaintenanceThresholdHours {
+					asset.Status = "Maintenance"
+				}
 			}
 		}
+	}
+
+	// Handle Image Upload
+	imageURL, err := saveUploadedFile(c, "image", "uploads/assets", []string{"image/jpeg", "image/png", "image/webp"})
+	if err == nil {
+		asset.ImageURL = imageURL
+	}
+
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	asset.Name = p.Sanitize(asset.Name)
+	asset.Model = p.Sanitize(asset.Model)
+	asset.SerialNumber = p.Sanitize(asset.SerialNumber)
+	asset.Notes = p.Sanitize(asset.Notes)
+
+	if err := database.DB.Save(&asset).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
+		return
 	}
 
 	c.JSON(http.StatusOK, asset)
@@ -516,17 +571,56 @@ func UpdateOfficeAsset(c *gin.Context) {
 // UpdateRndAsset godoc
 func UpdateRndAsset(c *gin.Context) {
 	id := c.Param("id")
-	var input map[string]interface{}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+
 	var asset models.RndAsset
 	if err := database.DB.First(&asset, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
 		return
 	}
-	if err := database.DB.Model(&asset).Updates(input).Error; err != nil {
+
+	// Update fields from PostForm
+	if name := c.PostForm("name"); name != "" {
+		asset.Name = name
+	}
+	if assetType := c.PostForm("asset_type"); assetType != "" {
+		asset.AssetType = assetType
+	}
+	if serial := c.PostForm("serial_number"); serial != "" {
+		asset.SerialNumber = serial
+	}
+	if ref := c.PostForm("reference_number"); ref != "" {
+		asset.ReferenceNumber = ref
+	}
+	if status := c.PostForm("status"); status != "" {
+		asset.Status = status
+	}
+	if notes := c.PostForm("notes"); notes != "" {
+		asset.Notes = notes
+	}
+	if deptID := c.PostForm("department_id"); deptID != "" {
+		asset.DepartmentID = &deptID
+	}
+	if specsStr := c.PostForm("specifications"); specsStr != "" {
+		asset.Specifications = specsStr
+	}
+	if isClassified := c.PostForm("is_classified"); isClassified != "" {
+		asset.IsClassified = isClassified == "true"
+	}
+
+	// Handle Image Upload
+	imageURL, err := saveUploadedFile(c, "image", "uploads/assets", []string{"image/jpeg", "image/png", "image/webp"})
+	if err == nil {
+		asset.ImageURL = imageURL
+	}
+
+	// XSS Sanitization
+	p := bluemonday.UGCPolicy()
+	asset.Name = p.Sanitize(asset.Name)
+	asset.AssetType = p.Sanitize(asset.AssetType)
+	asset.SerialNumber = p.Sanitize(asset.SerialNumber)
+	asset.Notes = p.Sanitize(asset.Notes)
+
+	if err := database.DB.Save(&asset).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
 		return
 	}
@@ -796,6 +890,7 @@ func GetOperationsAssetsUnified(c *gin.Context) {
 		Model            string  `json:"model,omitempty"`
 		Type             string  `json:"type"` 
 		SerialNumber     string  `json:"serial_number"`
+		ReferenceNumber  string  `json:"reference_number"`
 		Status           string  `json:"status"`
 		TotalFlightHours float64 `json:"total_flight_hours,omitempty"`
 		CycleCount       int     `json:"cycle_count,omitempty"`
@@ -812,6 +907,7 @@ func GetOperationsAssetsUnified(c *gin.Context) {
 			Model:            d.Model,
 			Type:             "drone",
 			SerialNumber:     d.SerialNumber,
+			ReferenceNumber:  d.ReferenceNumber,
 			Status:           d.Status,
 			TotalFlightHours: d.TotalFlightHours,
 			UpdatedAt:        d.UpdatedAt.Format(time.RFC3339),
@@ -844,4 +940,70 @@ func GetOperationsAssetsUnified(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": results, "total": len(results)})
+}
+
+// DeleteOfficeAssetImage deletes the image of an office asset
+func DeleteOfficeAssetImage(c *gin.Context) {
+	id := c.Param("id")
+	var asset models.OfficeAsset
+	if err := database.DB.First(&asset, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+		return
+	}
+
+	if asset.ImageURL != "" {
+		filePath := filepath.Join(".", asset.ImageURL)
+		os.Remove(filePath)
+		asset.ImageURL = ""
+		if err := database.DB.Save(&asset).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Image deleted successfully"})
+}
+
+// DeleteRndAssetImage deletes the image of an R&D asset
+func DeleteRndAssetImage(c *gin.Context) {
+	id := c.Param("id")
+	var asset models.RndAsset
+	if err := database.DB.First(&asset, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+		return
+	}
+
+	if asset.ImageURL != "" {
+		filePath := filepath.Join(".", asset.ImageURL)
+		os.Remove(filePath)
+		asset.ImageURL = ""
+		if err := database.DB.Save(&asset).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Image deleted successfully"})
+}
+
+// DeleteDroneAssetImage deletes the image of a drone asset
+func DeleteDroneAssetImage(c *gin.Context) {
+	id := c.Param("id")
+	var asset models.DroneAsset
+	if err := database.DB.First(&asset, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+		return
+	}
+
+	if asset.ImageURL != "" {
+		filePath := filepath.Join(".", asset.ImageURL)
+		os.Remove(filePath)
+		asset.ImageURL = ""
+		if err := database.DB.Save(&asset).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Image deleted successfully"})
 }
