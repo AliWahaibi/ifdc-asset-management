@@ -166,7 +166,7 @@ export function UsersDashboard() {
                                 <button
                                     onClick={() => {
                                         setEditingId(row.id);
-                                        const validRoles = ['super_admin', 'manager', 'team_leader', 'employee'];
+                                        const validRoles = ['super_admin', 'manager', 'team_leader', 'employee', 'hr', 'ceo'];
                                         setFormData({
                                             full_name: row.full_name,
                                             email: row.email,
@@ -379,6 +379,8 @@ export function UsersDashboard() {
                                     <option value="manager">Manager</option>
                                     <option value="team_leader">Team Leader</option>
                                     <option value="employee">Employee</option>
+                                    <option value="hr">HR</option>
+                                    <option value="ceo">CEO</option>
                                 </select>
                             </div>
                             <div className="sm:col-span-1">

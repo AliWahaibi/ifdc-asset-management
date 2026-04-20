@@ -18,6 +18,8 @@ export function VehiclesManagement() {
     const [editingAsset, setEditingAsset] = useState<VehicleAsset | null>(null);
     const [mulkiyaImage, setMulkiyaImage] = useState<File | null>(null);
     const [inspectionImages, setInspectionImages] = useState<File[]>([]);
+    const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+    const [selectedDispatchVehicle, setSelectedDispatchVehicle] = useState('');
 
     const { register, handleSubmit, reset, formState: { errors } } = useForm<any>();
 
@@ -88,17 +90,22 @@ export function VehiclesManagement() {
         }
     };
 
-    const handleDispatch = async (vehicle: VehicleAsset) => {
-        if (window.confirm(`Are you sure you want to dispatch ${vehicle.name}? This will mark it as IN USE.`)) {
-            try {
-                const data = new FormData();
-                data.append('status', 'in_use');
-                await vehicleService.updateVehicle(vehicle.id, data);
-                toast.success('Vehicle dispatched successfully');
-                fetchAssets();
-            } catch (error) {
-                toast.error('Failed to dispatch vehicle');
-            }
+    const handleGeneralDispatch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedDispatchVehicle) return;
+        const vehicle = assets.find(v => v.id === selectedDispatchVehicle);
+        if (!vehicle) return;
+
+        try {
+            const data = new FormData();
+            data.append('status', 'in_use');
+            await vehicleService.updateVehicle(vehicle.id, data);
+            toast.success(`Vehicle ${vehicle.name} dispatched successfully`);
+            setIsDispatchModalOpen(false);
+            setSelectedDispatchVehicle('');
+            fetchAssets();
+        } catch (error) {
+            toast.error('Failed to dispatch vehicle');
         }
     };
 
@@ -179,14 +186,6 @@ export function VehiclesManagement() {
             header: 'Actions',
             render: (row: VehicleAsset) => (
                 <div className="flex flex-wrap gap-2">
-                    {row.status === 'available' && (
-                        <button
-                            onClick={() => handleDispatch(row)}
-                            className="p-2 text-blue-400 hover:text-white hover:bg-blue-500/50 rounded-lg transition-colors border border-blue-500/30 bg-blue-500/10 text-xs font-bold flex items-center gap-1"
-                        >
-                            Dispatch
-                        </button>
-                    )}
                     <button
                         onClick={() => openEditModal(row)}
                         className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
@@ -220,17 +219,26 @@ export function VehiclesManagement() {
                         <p className="mt-1 text-slate-400">Manage fleet vehicles, mileage, and maintenance.</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => {
-                        setEditingAsset(null);
-                        reset({ status: 'available', mileage: 0 });
-                        setIsModalOpen(true);
-                    }}
-                    className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-600 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                    <Plus className="h-5 w-5" />
-                    Add Vehicle
-                </button>
+                <div className="flex gap-3 mt-4 sm:mt-0">
+                    <button
+                        onClick={() => setIsDispatchModalOpen(true)}
+                        className="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/30 px-4 py-2.5 font-semibold text-blue-400 transition-all hover:bg-blue-500/20 hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                        <Car className="h-5 w-5" />
+                        Request/Dispatch Vehicle
+                    </button>
+                    <button
+                        onClick={() => {
+                            setEditingAsset(null);
+                            reset({ status: 'available', mileage: 0 });
+                            setIsModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-600 hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                        <Plus className="h-5 w-5" />
+                        Add Vehicle
+                    </button>
+                </div>
             </div>
 
             {/* Search and Filter */}
@@ -407,6 +415,57 @@ export function VehiclesManagement() {
                             className="px-4 py-2 text-sm font-medium bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
                         >
                             {editingAsset ? 'Update Vehicle' : 'Create Vehicle'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* Dispatch Modal */}
+            <Modal
+                isOpen={isDispatchModalOpen}
+                onClose={() => {
+                    setIsDispatchModalOpen(false);
+                    setSelectedDispatchVehicle('');
+                }}
+                title="Dispatch Vehicle"
+            >
+                <form onSubmit={handleGeneralDispatch} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-400 mb-1">Select Available Vehicle</label>
+                        <select
+                            required
+                            value={selectedDispatchVehicle}
+                            onChange={(e) => setSelectedDispatchVehicle(e.target.value)}
+                            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                        >
+                            <option value="" disabled>Select a vehicle...</option>
+                            {assets.filter(v => v.status === 'available').map(v => (
+                                <option key={v.id} value={v.id}>
+                                    {v.name} ({v.license_plate})
+                                </option>
+                            ))}
+                        </select>
+                        {assets.filter(v => v.status === 'available').length === 0 && (
+                            <p className="text-xs text-rose-400 mt-2">No vehicles currently available for dispatch.</p>
+                        )}
+                    </div>
+                    <div className="flex justify-end gap-3 mt-6">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsDispatchModalOpen(false);
+                                setSelectedDispatchVehicle('');
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={!selectedDispatchVehicle}
+                            className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Dispatch Vehicle
                         </button>
                     </div>
                 </form>

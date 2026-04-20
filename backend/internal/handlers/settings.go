@@ -1,18 +1,26 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"ifdc-backend/internal/database"
 	"ifdc-backend/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // GetSettings fetches the global system settings (ID: 1)
 func GetSettings(c *gin.Context) {
 	var settings models.SystemSetting
 	if err := database.DB.First(&settings, 1).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			settings = models.SystemSetting{}
+			settings.ID = 1
+			c.JSON(http.StatusOK, settings)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch settings"})
 		return
 	}

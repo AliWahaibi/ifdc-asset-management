@@ -167,8 +167,8 @@ export function LeaveManagement() {
             sortable: false,
             render: (row) => {
                 const isPending = row.status === 'pending_manager' || row.status === 'pending_ceo';
-                const canApprove = (user?.role === 'super_admin') || 
-                                 (user?.role === 'manager' && row.status === 'pending_manager' && row.user?.manager_id === user?.id);
+                const canApprove = (user?.role === 'super_admin' || user?.role === 'ceo') || 
+                                 (['manager', 'team_leader'].includes(user?.role || '') && row.status === 'pending_manager' && row.user?.manager_id === user?.id);
                 
                 return (
                     <div className="flex gap-2">
