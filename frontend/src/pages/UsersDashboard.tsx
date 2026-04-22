@@ -21,6 +21,10 @@ export function UsersDashboard() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'account'|'personal'|'documents'>('account');
     const [viewingDoc, setViewingDoc] = useState<{url: string, name: string} | null>(null);
+    const [potentialManagers, setPotentialManagers] = useState<User[]>([]);
+
+    const isReportingRole = (role: UserRole) => ['employee', 'team_leader'].includes(role);
+    const isLeadershipRole = (role: UserRole) => ['manager', 'hr', 'ceo', 'super_admin'].includes(role);
 
     const handleForceDownload = async (url: string, filename: string) => {
         try {
@@ -72,6 +76,40 @@ export function UsersDashboard() {
     useEffect(() => {
         fetchUsers();
     }, []);
+
+    // Smart Auto-Assignment Logic
+    useEffect(() => {
+        const updateHierarchy = async () => {
+            if (!formData.department || formData.department === 'N/A' || formData.role === 'hr' || formData.role === 'ceo' || formData.role === 'super_admin') {
+                setPotentialManagers([]);
+                return;
+            }
+
+            try {
+                let targetRole = '';
+                if (formData.role === 'team_leader') targetRole = 'manager';
+                else if (formData.role === 'employee') targetRole = 'team_leader';
+
+                if (targetRole) {
+                    const hierarchyData = await userService.getHierarchy(formData.department, targetRole);
+                    setPotentialManagers(hierarchyData);
+
+                    // Auto-select if only one option exists or if it's a manager for a team leader
+                    if (hierarchyData.length === 1 || (formData.role === 'team_leader' && hierarchyData.length > 0)) {
+                        setFormData(prev => ({ ...prev, manager_id: hierarchyData[0].id }));
+                    } else if (hierarchyData.length === 0) {
+                        setFormData(prev => ({ ...prev, manager_id: '' }));
+                    }
+                } else {
+                    setPotentialManagers([]);
+                }
+            } catch (error) {
+                console.error('Failed to fetch hierarchy', error);
+            }
+        };
+
+        updateHierarchy();
+    }, [formData.role, formData.department]);
 
     const columns: Column<User>[] = [
         {
@@ -414,12 +452,19 @@ export function UsersDashboard() {
                                 <label className="mb-2 block text-sm font-medium text-slate-200">System Role</label>
                                 <select value={formData.role} onChange={e => {
                                 const newRole = e.target.value as UserRole;
-                                setFormData({ 
+                                let updates: any = { 
                                     ...formData, 
                                     role: newRole, 
-                                    manager_id: newRole === 'employee' ? formData.manager_id : '',
+                                    manager_id: isReportingRole(newRole) ? formData.manager_id : '',
                                     department: newRole === 'ceo' ? '' : (formData.department === 'N/A' || formData.department === '') ? 'Operation' : formData.department 
-                                });
+                                };
+
+                                if (newRole === 'hr') {
+                                    updates.department = 'Human Resources';
+                                    updates.manager_id = ''; // Reports to CEO
+                                }
+
+                                setFormData(updates);
                                 }} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
                                     <option value="super_admin">Super Admin</option>
                                     <option value="manager">Manager</option>
@@ -433,24 +478,25 @@ export function UsersDashboard() {
                                 <label className="mb-2 block text-sm font-medium text-slate-200">Position / Job Title</label>
                                 <input type="text" value={formData.position} onChange={e => setFormData({ ...formData, position: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30" />
                             </div>
-                            {formData.role === 'employee' ? (
+
+                            {isReportingRole(formData.role) ? (
                                 <div className="sm:col-span-1">
-                                    <label className="mb-2 block text-sm font-medium text-slate-200">Team Leader</label>
+                                    <label className="mb-2 block text-sm font-medium text-slate-200">Reports To (Direct Manager)</label>
                                     <select 
                                         value={formData.manager_id} 
                                         onChange={e => setFormData({ ...formData, manager_id: e.target.value })} 
                                         className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
                                     >
                                         <option value="">None (Reports to CEO directly)</option>
-                                        {users.filter(u => ['manager', 'super_admin', 'team_leader'].includes(u.role) && u.id !== editingId).map(m => (
+                                        {(potentialManagers.length > 0 ? potentialManagers : users.filter(u => ['manager', 'super_admin', 'team_leader'].includes(u.role) && u.id !== editingId)).map(m => (
                                             <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>
                                         ))}
                                     </select>
                                 </div>
                             ) : (
                                 <div className="sm:col-span-1">
-                                    <label className="mb-2 block text-sm font-medium text-slate-200">Team Leader</label>
-                                    <input readOnly value="N/A (Direct Report)" className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed" />
+                                    <label className="mb-2 block text-sm font-medium text-slate-200">Reports To (Direct Manager)</label>
+                                    <input readOnly value="N/A (Reports to CEO directly)" className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed" />
                                 </div>
                             )}
 
@@ -458,12 +504,13 @@ export function UsersDashboard() {
                             {formData.role !== 'ceo' ? (
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-200">Department</label>
-                                <select required value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
+                                <select required disabled={formData.role === 'hr'} value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed">
                                     <option value="Operation">Operation</option>
                                     <option value="Sales">Sales</option>
                                     <option value="Academy">Academy</option>
                                     <option value="R&D">R&D</option>
                                     <option value="Business Development">Business Development</option>
+                                    <option value="Human Resources">Human Resources</option>
                                 </select>
                             </div>
                             ) : (

@@ -207,6 +207,15 @@ func UploadUserFiles(c *gin.Context) {
 		user.Role = "employee"
 	}
 
+	// Extract Hierarchy Reporting
+	managerID := c.PostForm("manager_id")
+	if managerID != "" {
+		user.ManagerID = &managerID
+	} else if isUpdate && managerID == "" {
+		// Only clear manager_id on update if it's explicitly empty
+		user.ManagerID = nil
+	}
+
 	// Enforce department rules for specific roles
 	if user.Role == "manager" && user.Department == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Department is required for managers"})
@@ -532,6 +541,29 @@ func GetUser(c *gin.Context) {
 		"office_assets": assets,
 		"admissions":    admissions,
 	})
+}
+
+// GetHierarchy returns users filtered by department and role for frontend auto-selection
+func GetHierarchy(c *gin.Context) {
+	dept := c.Query("department")
+	role := c.Query("role")
+
+	if dept == "" || role == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Department and role are required"})
+		return
+	}
+
+	var users []models.User
+	err := database.DB.Select("id, full_name, role, department").
+		Where("department = ? AND role = ? AND status = 'active'", dept, role).
+		Find(&users).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch hierarchy data"})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
 }
 
 // Helper to validate MIME types

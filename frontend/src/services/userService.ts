@@ -66,4 +66,12 @@ export const userService = {
         });
         return response.data;
     },
+    
+    // Get hierarchy data (managers/team leaders for a department)
+    getHierarchy: async (department: string, role: string): Promise<User[]> => {
+        const response = await apiClient.get<User[]>('/users/hierarchy', {
+            params: { department, role }
+        });
+        return response.data;
+    },
 };

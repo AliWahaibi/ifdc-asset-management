@@ -61,8 +61,12 @@ func SetupRouter() *gin.Engine {
 		users := api.Group("/users")
 		users.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
+			// GET /api/users/hierarchy for smart auto-assignment (Must be before /:id)
+			users.GET("/hierarchy", handlers.GetHierarchy)
+
 			// GET /api/users to return mock users list
 			users.GET("", handlers.GetUsers)
+			
 			// GET /api/users/:id to return specific user
 			users.GET("/:id", handlers.GetUser)
 			// POST /api/users to handle multipart form data
