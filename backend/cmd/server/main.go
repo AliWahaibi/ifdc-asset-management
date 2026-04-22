@@ -17,6 +17,9 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
+	// Apply CORS Middleware globally and early to ensure static files are covered
+	r.Use(middleware.CORSMiddleware())
+
 	// 1. Serve static files with secure headers (Content-Disposition: inline)
 	r.GET("/uploads/*filepath", func(c *gin.Context) {
 		path := "./uploads" + c.Param("filepath")
@@ -24,9 +27,6 @@ func SetupRouter() *gin.Engine {
 		c.File(path)
 	})
 
-	// Apply CORS Middleware globally
-	r.Use(middleware.CORSMiddleware())
-	
 	// Apply Body size limit (2MB) globally to prevent DoS
 	r.Use(middleware.BodyLimiter(10 << 20))
 

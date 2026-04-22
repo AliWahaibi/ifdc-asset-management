@@ -207,6 +207,15 @@ func UploadUserFiles(c *gin.Context) {
 		user.Role = "employee"
 	}
 
+	// Enforce department rules for specific roles
+	if user.Role == "manager" && user.Department == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Department is required for managers"})
+		return
+	}
+	if user.Role == "ceo" {
+		user.Department = "" // CEOs don't belong to a specific department
+	}
+
 	if isUpdate {
 		if err := database.DB.Save(&user).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user in database"})

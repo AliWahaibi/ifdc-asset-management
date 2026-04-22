@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { Users, Plus, UploadCloud, FileText, Eye, Download } from 'lucide-react';
+import { Users, Plus, UploadCloud, FileText, Eye, Download, X } from 'lucide-react';
 import { DataTable } from '@/components/ui/DataTable';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -9,6 +9,7 @@ import type { Column } from '@/components/ui/DataTable';
 import type { User, UserRole } from '@/types';
 import { userService } from '@/services/userService';
 import { ROLE_LABELS } from '@/lib/roles';
+import { formatFileUrl } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 export function UsersDashboard() {
@@ -19,6 +20,25 @@ export function UsersDashboard() {
     const [submitting, setSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'account'|'personal'|'documents'>('account');
+    const [viewingDoc, setViewingDoc] = useState<{url: string, name: string} | null>(null);
+
+    const handleForceDownload = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(formatFileUrl(url));
+            if (!response.ok) throw new Error('Failed to fetch file');
+            const blob = await response.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            toast.error('Failed to download file');
+        }
+    };
 
     // Form State
     const [formData, setFormData] = useState({
@@ -101,12 +121,12 @@ export function UsersDashboard() {
                             <span className="flex items-center gap-1 rounded-lg bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-400">
                                 <FileText className="h-3 w-3" /> CV
                             </span>
-                            <a href={`http://localhost:8080${row.cv_url}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View CV">
+                            <button onClick={() => setViewingDoc({ url: row.cv_url, name: `${row.full_name} - CV` })} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View CV">
                                 <Eye className="h-3 w-3" />
-                            </a>
-                            <a href={`http://localhost:8080${row.cv_url}`} download className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download CV">
+                            </button>
+                            <button onClick={() => handleForceDownload(row.cv_url, `${row.full_name.replace(/\\s+/g, '_')}_CV.${row.cv_url.split('.').pop()}`)} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download CV">
                                 <Download className="h-3 w-3" />
-                            </a>
+                            </button>
                         </div>
                     ) : (
                         <span className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2 py-1 text-[11px] font-medium text-slate-500">
@@ -118,12 +138,12 @@ export function UsersDashboard() {
                             <span className="flex items-center gap-1 rounded-lg bg-violet-500/10 px-2 py-1 text-[11px] font-semibold text-violet-400">
                                 <FileText className="h-3 w-3" /> ID
                             </span>
-                            <a href={`http://localhost:8080${row.id_card_url}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View National ID">
+                            <button onClick={() => setViewingDoc({ url: row.id_card_url, name: `${row.full_name} - National ID` })} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View National ID">
                                 <Eye className="h-3 w-3" />
-                            </a>
-                            <a href={`http://localhost:8080${row.id_card_url}`} download className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download National ID">
+                            </button>
+                            <button onClick={() => handleForceDownload(row.id_card_url, `${row.full_name.replace(/\\s+/g, '_')}_ID.${row.id_card_url.split('.').pop()}`)} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download National ID">
                                 <Download className="h-3 w-3" />
-                            </a>
+                            </button>
                         </div>
                     ) : (
                         <span className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2 py-1 text-[11px] font-medium text-slate-500">
@@ -268,7 +288,9 @@ export function UsersDashboard() {
     };
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className={`flex flex-col lg:flex-row gap-6 animate-fade-in ${viewingDoc ? 'h-[calc(100vh-8rem)]' : ''}`}>
+            {/* Left Side: Original Content */}
+            <div className={`flex flex-col space-y-8 transition-all duration-300 ${viewingDoc ? 'w-full lg:w-1/2 overflow-y-auto pr-2' : 'w-full'}`}>
             {/* Header */}
             <div className="flex items-center justify-between mt-2 mb-10">
                 <div>
@@ -310,6 +332,30 @@ export function UsersDashboard() {
                     keyExtractor={(row) => row.id}
                     searchPlaceholder="Search personnel by name or email..."
                 />
+            )}
+            </div>
+
+            {/* Right Side: Document Viewer */}
+            {viewingDoc && (
+                <div className="hidden lg:flex w-1/2 flex-col rounded-xl border border-slate-700 bg-slate-800 shadow-xl overflow-hidden animate-fade-in">
+                    <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 p-4 sticky top-0 z-10 backdrop-blur-sm">
+                        <h3 className="text-lg font-semibold text-slate-200 truncate pr-4">{viewingDoc.name}</h3>
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => handleForceDownload(viewingDoc.url, `${viewingDoc.name.replace(/\\s+/g, '_')}.${viewingDoc.url.split('.').pop()}`)} 
+                                className="flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-all"
+                            >
+                                <Download className="h-4 w-4" /> <span className="hidden xl:inline">Download</span>
+                            </button>
+                            <button onClick={() => setViewingDoc(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex-1 p-0 overflow-y-auto bg-slate-900/50">
+                        <iframe src={formatFileUrl(viewingDoc.url)} className="w-full h-full border-0 min-h-[600px]" title={viewingDoc.name} />
+                    </div>
+                </div>
             )}
 
             {/* Modal */}
@@ -372,7 +418,7 @@ export function UsersDashboard() {
                                     ...formData, 
                                     role: newRole, 
                                     manager_id: newRole === 'employee' ? formData.manager_id : '',
-                                    department: newRole === 'manager' ? 'N/A' : formData.department === 'N/A' ? 'Operation' : formData.department 
+                                    department: newRole === 'ceo' ? '' : (formData.department === 'N/A' || formData.department === '') ? 'Operation' : formData.department 
                                 });
                                 }} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
                                     <option value="super_admin">Super Admin</option>
@@ -409,10 +455,10 @@ export function UsersDashboard() {
                             )}
 
                             {/* Phase 4 Synchronized Fields */}
-                            {formData.role !== 'manager' ? (
+                            {formData.role !== 'ceo' ? (
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-200">Department</label>
-                                <select value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
+                                <select required value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30">
                                     <option value="Operation">Operation</option>
                                     <option value="Sales">Sales</option>
                                     <option value="Academy">Academy</option>
@@ -423,7 +469,7 @@ export function UsersDashboard() {
                             ) : (
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-200">Department</label>
-                                <input readOnly value="N/A — Managers oversee all departments" className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed" />
+                                <input readOnly value="N/A - Executive Level" className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed" />
                             </div>
                             )}
                         </div>
