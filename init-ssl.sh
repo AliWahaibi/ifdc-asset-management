@@ -18,8 +18,8 @@ openssl req -x509 -nodes -newkey rsa:4096 -days 1 \
   -out "$DATA_PATH/conf/live/$DOMAIN/fullchain.pem" \
   -subj "/CN=localhost"
 
-echo "### 4. Starting the Nginx frontend (react-frontend)..."
-docker compose up -d react-frontend
+echo "### 4. Starting the Nginx frontend (react-frontend) with --build..."
+docker compose up -d --build react-frontend
 
 echo "### 5. Waiting for Nginx to fully boot (10 seconds)..."
 sleep 10
