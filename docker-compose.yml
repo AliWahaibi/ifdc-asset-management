@@ -36,9 +36,10 @@ services:
       - AI_SERVICE_URL=http://python-ai:8000
       - JWT_SECRET=${JWT_SECRET:-your_dev_jwt_secret_change_in_prod}
       # CORS Allowed Origins
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:80}
-    ports:
-      - "8080:8080"
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://aerotrack.ifdc.tech,http://localhost:5173,http://localhost:80}
+    # Removed public port 8080 for security (Nginx handles proxying now)
+    expose:
+      - "8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,9 +76,23 @@ services:
       - VITE_AI_SERVICE_URL=${VITE_AI_SERVICE_URL:-http://localhost:8000}
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
     depends_on:
       - go-backend
       - python-ai
+    networks:
+      - app_network
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     networks:
       - app_network
 

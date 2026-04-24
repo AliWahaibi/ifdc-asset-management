@@ -15,7 +15,12 @@ func CORSMiddleware() gin.HandlerFunc {
 
 		if allowedOriginsEnv == "" {
 			// Fallback to localhost for local development
-			allowedOrigins = []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:8080"}
+			allowedOrigins = []string{
+				"https://aerotrack.ifdc.tech",
+				"http://localhost:5173",
+				"http://localhost:3000",
+				"http://localhost:8080",
+			}
 		} else {
 			// Parse comma-separated list
 			origins := strings.Split(allowedOriginsEnv, ",")
