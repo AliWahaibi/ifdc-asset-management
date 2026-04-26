@@ -16,9 +16,9 @@ export interface CreateRndAssetData {
 export type UpdateRndAssetData = Partial<CreateRndAssetData>;
 
 export const rndService = {
-    getAssets: async (page = 1, limit = 10, search?: string): Promise<PaginatedResponse<RndAsset>> => {
+    getAssets: async (page = 1, limit = 10, search?: string, status?: string, asset_type?: string): Promise<PaginatedResponse<RndAsset>> => {
         const response = await apiClient.get<PaginatedResponse<RndAsset>>('/rnd/assets', {
-            params: { page, limit, search }
+            params: { page, limit, search, status, asset_type }
         });
         return response.data;
     },

@@ -29,22 +29,40 @@ func GlobalSearch(c *gin.Context) {
 	searchPattern := "%" + query + "%"
 	var results []SearchResult
 
+	userRole := c.GetString("userRole")
+	userID := c.GetString("userID")
+	var manager models.User
+	if userRole == "manager" {
+		database.DB.First(&manager, "id = ?", userID)
+	}
+
 	// 1. Search Users (full_name, email)
 	var users []models.User
-	database.DB.Where("(full_name ILIKE ? OR email ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern).Limit(5).Find(&users)
+	userQuery := database.DB.Where("(full_name ILIKE ? OR email ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern)
+	if userRole == "manager" {
+		userQuery = userQuery.Where("department = ?", manager.Department)
+	}
+	userQuery.Limit(5).Find(&users)
 	for _, u := range users {
 		results = append(results, SearchResult{
 			ID:          u.ID,
 			Type:        "User",
 			Title:       u.FullName,
 			Description: u.Email,
-			Link:        fmt.Sprintf("/users?search=%s", u.ID), // Or just /users, handled on frontend
+			Link:        fmt.Sprintf("/users?search=%s", u.ID),
 		})
 	}
 
 	// 2. Search Drone Assets
 	var drones []models.DroneAsset
-	database.DB.Where("(name ILIKE ? OR serial_number ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern).Limit(5).Find(&drones)
+	droneQuery := database.DB.Where("(name ILIKE ? OR serial_number ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern)
+	// For assets, we use DepartmentID if available, but users have 'Department' name.
+	// In the models, DroneAsset has DepartmentID *string (uuid).
+	// Let's check if the manager has DepartmentID.
+	if userRole == "manager" && manager.DepartmentID != nil {
+		droneQuery = droneQuery.Where("department_id = ?", *manager.DepartmentID)
+	}
+	droneQuery.Limit(5).Find(&drones)
 	for _, a := range drones {
 		results = append(results, SearchResult{
 			ID:          a.ID,
@@ -57,7 +75,11 @@ func GlobalSearch(c *gin.Context) {
 
 	// 3. Search Office Assets
 	var office []models.OfficeAsset
-	database.DB.Where("(name ILIKE ? OR serial_number ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern).Limit(5).Find(&office)
+	officeQuery := database.DB.Where("(name ILIKE ? OR serial_number ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern)
+	if userRole == "manager" && manager.DepartmentID != nil {
+		officeQuery = officeQuery.Where("department_id = ?", *manager.DepartmentID)
+	}
+	officeQuery.Limit(5).Find(&office)
 	for _, a := range office {
 		results = append(results, SearchResult{
 			ID:          a.ID,
@@ -70,7 +92,11 @@ func GlobalSearch(c *gin.Context) {
 
 	// 4. Search R&D Assets
 	var rnd []models.RndAsset
-	database.DB.Where("(name ILIKE ? OR serial_number ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern).Limit(5).Find(&rnd)
+	rndQuery := database.DB.Where("(name ILIKE ? OR serial_number ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern)
+	if userRole == "manager" && manager.DepartmentID != nil {
+		rndQuery = rndQuery.Where("department_id = ?", *manager.DepartmentID)
+	}
+	rndQuery.Limit(5).Find(&rnd)
 	for _, a := range rnd {
 		results = append(results, SearchResult{
 			ID:          a.ID,
@@ -83,18 +109,26 @@ func GlobalSearch(c *gin.Context) {
 
 	// 5. Search Reservations
 	var reservations []models.Reservation
-	// Using CAST(id AS TEXT) for postgres UUID LIKE comparison if supported, or just filtering by notes
-	// If id is uuid, ILIKE directly on uuid might fail in Postgres. It's safer to cast id to text: CAST(id as text) ILIKE ?
-	database.DB.Preload("User").Where("(CAST(id as text) ILIKE ? OR notes ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern).Limit(5).Find(&reservations)
+	resQuery := database.DB.Preload("User").Where("(CAST(id as text) ILIKE ? OR notes ILIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern)
+	if userRole == "manager" {
+		resQuery = resQuery.Joins("JOIN users ON users.id = reservations.user_id").Where("users.department = ?", manager.Department)
+	}
+	resQuery.Limit(5).Find(&reservations)
 	for _, r := range reservations {
 		description := r.Notes
 		if description == "" {
-			description = fmt.Sprintf("Requested by %s", r.User.FullName)
+			if r.User != nil {
+				description = fmt.Sprintf("Requested by %s", r.User.FullName)
+			} else if r.IsExternal {
+				description = fmt.Sprintf("Requested by External: %s", r.ExternalOrgName)
+			} else {
+				description = "Reservation"
+			}
 		}
 		results = append(results, SearchResult{
 			ID:          r.ID,
 			Type:        "Reservation",
-			Title:       fmt.Sprintf("Reservation %s", r.ID[:8]), // Use first 8 chars of UUID
+			Title:       fmt.Sprintf("Reservation %s", r.ID[:8]),
 			Description: description,
 			Link:        "/reservations",
 		})

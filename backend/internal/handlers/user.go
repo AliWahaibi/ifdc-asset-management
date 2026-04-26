@@ -37,6 +37,16 @@ func GetUsers(c *gin.Context) {
 	var total int64
 
 	query := database.DB.Model(&models.User{})
+	
+	// Role-Based Scoping for Managers
+	userRole := c.GetString("userRole")
+	if userRole == "manager" {
+		currentUserID := c.GetString("userID")
+		var manager models.User
+		database.DB.First(&manager, "id = ?", currentUserID)
+		query = query.Where("department = ?", manager.Department)
+	}
+
 	if search != "" {
 		query = query.Where("full_name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
@@ -81,15 +91,42 @@ func UploadUserFiles(c *gin.Context) {
 	userID := c.Param("id")
 	isUpdate := userID != ""
 
+	// Get current user role from context
+	reqUserRole := c.GetString("userRole")
+
 	var user models.User
 	if isUpdate {
 		if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
 		}
-		user.Email = email
-		user.FullName = fullName
+
+		// Authorization Check: Manager restricted to their department
+		if reqUserRole == "manager" {
+			var manager models.User
+			database.DB.First(&manager, "id = ?", c.GetString("userID"))
+			if manager.Department != user.Department {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Managers can only update users in their department"})
+				return
+			}
+		}
+
+		// Only admins/managers can update email and name, OR if creating
+		if reqUserRole == "super_admin" || reqUserRole == "manager" || reqUserRole == "hr" {
+			user.Email = email
+			user.FullName = fullName
+		}
 	} else {
+		// Creation Check: Manager restricted to their department
+		if reqUserRole == "manager" {
+			var manager models.User
+			database.DB.First(&manager, "id = ?", c.GetString("userID"))
+			if dept := c.PostForm("department"); dept != manager.Department {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Managers can only create users in their own department"})
+				return
+			}
+		}
+
 		user = models.User{
 			ID:       uuid.New().String(),
 			Email:    email,
@@ -168,7 +205,9 @@ func UploadUserFiles(c *gin.Context) {
 
 	// New Phase 1 HR Fields
 	if dept := c.PostForm("department"); dept != "" {
-		user.Department = dept
+		if !isUpdate || reqUserRole == "super_admin" || reqUserRole == "manager" || reqUserRole == "hr" {
+			user.Department = dept
+		}
 	}
 	if addr := c.PostForm("address"); addr != "" {
 		user.Address = addr
@@ -327,7 +366,7 @@ func DeleteUserDocument(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
 		}
-		
+
 		switch docID {
 		case "cv":
 			// Try to physical remove file
@@ -341,7 +380,7 @@ func DeleteUserDocument(c *gin.Context) {
 			}
 			user.IDCardUrl = ""
 		}
-		
+
 		database.DB.Save(&user)
 		c.JSON(http.StatusOK, gin.H{"message": "Document deleted successfully"})
 		return
@@ -405,10 +444,14 @@ func ReplaceUserDocument(c *gin.Context) {
 		io.Copy(out, file)
 
 		if docID == "cv" {
-			if user.CVUrl != "" { os.Remove("." + user.CVUrl) }
+			if user.CVUrl != "" {
+				os.Remove("." + user.CVUrl)
+			}
 			user.CVUrl = fmt.Sprintf("/uploads/users/%s", filename)
 		} else {
-			if user.IDCardUrl != "" { os.Remove("." + user.IDCardUrl) }
+			if user.IDCardUrl != "" {
+				os.Remove("." + user.IDCardUrl)
+			}
 			user.IDCardUrl = fmt.Sprintf("/uploads/users/%s", filename)
 		}
 		database.DB.Save(&user)

@@ -7,8 +7,10 @@ import { DataTable } from '@/components/ui/DataTable';
 import type { Column } from '@/components/ui/DataTable';
 import { Modal } from '@/components/ui/Modal';
 import { format } from 'date-fns';
+import { useAuthStore } from '@/stores/authStore';
 
 export function VehiclesManagement() {
+    const { user } = useAuthStore();
     const [assets, setAssets] = useState<VehicleAsset[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -16,6 +18,7 @@ export function VehiclesManagement() {
     const [totalPages, setTotalPages] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAsset, setEditingAsset] = useState<VehicleAsset | null>(null);
+    const [statusFilter, setStatusFilter] = useState('');
     const [mulkiyaImage, setMulkiyaImage] = useState<File | null>(null);
     const [inspectionImages, setInspectionImages] = useState<File[]>([]);
     const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
@@ -26,7 +29,7 @@ export function VehiclesManagement() {
     const fetchAssets = async () => {
         setLoading(true);
         try {
-            const response = await vehicleService.getAssets(page, 10, searchTerm);
+            const response = await vehicleService.getAssets(page, 10, searchTerm, statusFilter);
             setAssets(response.data);
             setTotalPages(Math.ceil(response.total / response.limit));
         } catch (error) {
@@ -41,7 +44,7 @@ export function VehiclesManagement() {
             fetchAssets();
         }, 300);
         return () => clearTimeout(debounce);
-    }, [page, searchTerm]);
+    }, [page, searchTerm, statusFilter]);
 
     const onSubmit = async (formData: any) => {
         try {
@@ -227,17 +230,19 @@ export function VehiclesManagement() {
                         <Car className="h-5 w-5" />
                         Request/Dispatch Vehicle
                     </button>
-                    <button
-                        onClick={() => {
-                            setEditingAsset(null);
-                            reset({ status: 'available', mileage: 0 });
-                            setIsModalOpen(true);
-                        }}
-                        className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-600 hover:scale-[1.02] active:scale-[0.98]"
-                    >
-                        <Plus className="h-5 w-5" />
-                        Add Vehicle
-                    </button>
+                    {user?.role !== 'employee' && (
+                        <button
+                            onClick={() => {
+                                setEditingAsset(null);
+                                reset({ status: 'available', mileage: 0 });
+                                setIsModalOpen(true);
+                            }}
+                            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-600 hover:scale-[1.02] active:scale-[0.98]"
+                        >
+                            <Plus className="h-5 w-5" />
+                            Add Vehicle
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -252,6 +257,22 @@ export function VehiclesManagement() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full rounded-xl border border-slate-700 bg-slate-800/50 pl-10 pr-4 py-2 text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
                     />
+                </div>
+                <div className="w-48">
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => {
+                            setStatusFilter(e.target.value);
+                            setPage(1);
+                        }}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2 text-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all appearance-none"
+                    >
+                        <option value="">All Statuses</option>
+                        <option value="available">Available</option>
+                        <option value="in_use">In Use</option>
+                        <option value="maintenance">Maintenance</option>
+                        <option value="reserved">Reserved</option>
+                    </select>
                 </div>
             </div>
 

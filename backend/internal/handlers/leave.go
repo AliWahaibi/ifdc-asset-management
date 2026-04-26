@@ -15,7 +15,7 @@ type CreateLeaveRequestInput struct {
 	StartDate          string `json:"start_date" binding:"required"`
 	EndDate            string `json:"end_date" binding:"required"`
 	Reason             string `json:"reason"`
-	LeaveType          string `json:"leave_type" binding:"required"` // annual, sick, emergency, special
+	LeaveType          string `json:"leave_type" binding:"required"` // annual, sick, emergency, special, sick_companion
 	SpecialLeaveReason string `json:"special_leave_reason"`
 }
 
@@ -60,6 +60,18 @@ func CreateLeaveRequest(c *gin.Context) {
 		return
 	}
 
+	// Strict overlap check for existing leaves (pending or approved)
+	var overlapCount int64
+	database.DB.Model(&models.LeaveRequest{}).
+		Where("user_id = ? AND status IN ('pending_manager', 'pending_ceo', 'pending_hr', 'approved') AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND end_date <= ?))",
+			userID, endDate, startDate, endDate, startDate, startDate, endDate).
+		Count(&overlapCount)
+
+	if overlapCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You already have a leave request during this period."})
+		return
+	}
+
 	// Prevent overlaps with blackout dates for annual leaves
 	if input.LeaveType == "annual" {
 		var blackoutConflicts int64
@@ -74,7 +86,7 @@ func CreateLeaveRequest(c *gin.Context) {
 	}
 
 	totalDays := CalculateWorkingDays(startDate, endDate)
-	
+
 	// Sick leave includes weekends
 	if input.LeaveType == "sick" {
 		totalDays = int(endDate.Sub(startDate).Hours()/24) + 1
@@ -90,6 +102,12 @@ func CreateLeaveRequest(c *gin.Context) {
 	daysAhead := int(startDate.Sub(now).Hours() / 24)
 
 	switch input.LeaveType {
+	case "sick":
+		if totalDays > 6 {
+			// Task 7: Sick Leave Overflow Logic
+			// Deduct from Annual Leave balance instead
+			input.LeaveType = "annual"
+		}
 	case "annual":
 		if totalDays > 15 && daysAhead < 30 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Annual leaves longer than 15 days require a 30-day advance notice."})
@@ -120,11 +138,28 @@ func CreateLeaveRequest(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Emergency leave is capped at 6 days per year."})
 			return
 		}
+	case "sick_companion":
+		if totalDays > 14 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Sick companion leave is capped at 14 days."})
+			return
+		}
 	}
 
 	// Initial Status Logic
 	status := "pending_manager"
+	pendingApprovalBy := "manager"
 	if userRole == "manager" || userRole == "ceo" || userRole == "super_admin" {
+		status = "pending_ceo"
+		pendingApprovalBy = "ceo"
+	}
+
+	// Task 7: Approval Routing
+	switch input.LeaveType {
+	case "sick", "emergency":
+		pendingApprovalBy = "hr"
+		status = "pending_hr"
+	case "annual", "sick_companion":
+		pendingApprovalBy = "ceo"
 		status = "pending_ceo"
 	}
 
@@ -135,6 +170,7 @@ func CreateLeaveRequest(c *gin.Context) {
 		StartDate:          startDate,
 		EndDate:            endDate,
 		Status:             status,
+		PendingApprovalBy:  pendingApprovalBy,
 		TotalDays:          totalDays,
 		Reason:             input.Reason,
 	}
@@ -159,17 +195,59 @@ func GetLeaveRequests(c *gin.Context) {
 
 	// Visibility Rules
 	switch userRole {
-	case "super_admin":
+	case "super_admin", "ceo", "CEO":
 		// CEO/HR sees everyone
 	case "manager":
-		// Manager sees own + department reports
-		query = query.Where("user_id = ? OR user_id IN (SELECT id FROM users WHERE manager_id = ?)", userID, userID)
+		// Manager sees only their department
+		var manager models.User
+		database.DB.First(&manager, "id = ?", userID)
+		query = query.Joins("JOIN users ON users.id = leave_requests.user_id").Where("users.department = ?", manager.Department)
 	default:
 		// Employees see only their own
 		query = query.Where("user_id = ?", userID)
 	}
 
 	if err := query.Order("created_at desc").Find(&requests).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave requests"})
+		return
+	}
+
+	c.JSON(http.StatusOK, requests)
+}
+
+// GetAllLeaves retrieves all leaves with filters for admins (Task 10a)
+func GetAllLeaves(c *gin.Context) {
+	userID := c.Query("user_id")
+	department := c.Query("department")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	var requests []models.LeaveRequest
+	query := database.DB.Preload("User")
+
+	// Strict Scoping for Managers: They can only see their own department
+	userRole := c.GetString("userRole")
+	if userRole == "manager" {
+		currentUserID := c.GetString("userID")
+		var manager models.User
+		database.DB.First(&manager, "id = ?", currentUserID)
+		department = manager.Department // Force the department filter to their own
+	}
+
+	if userID != "" {
+		query = query.Where("user_id = ?", userID)
+	}
+	if department != "" {
+		query = query.Joins("JOIN users ON users.id = leave_requests.user_id").Where("users.department = ?", department)
+	}
+	if startDate != "" {
+		query = query.Where("start_date >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("end_date <= ?", endDate)
+	}
+
+	if err := query.Order("start_date desc").Find(&requests).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave requests"})
 		return
 	}
@@ -205,7 +283,7 @@ func UpdateLeaveStatus(c *gin.Context) {
 
 	if input.Status == "cancelled" {
 		// Users can cancel their own pending requests
-		if leave.UserID == userID && (leave.Status == "pending_manager" || leave.Status == "pending_ceo") {
+		if leave.UserID == userID && (leave.Status == "pending_manager" || leave.Status == "pending_ceo" || leave.Status == "pending_hr") {
 			canApprove = true
 		}
 	} else {
@@ -215,16 +293,32 @@ func UpdateLeaveStatus(c *gin.Context) {
 			return
 		}
 
-		if userRole == "super_admin" {
+		// Exclusive Logic: Only CEO can approve or reject Annual Leaves and Sick Companion Leaves
+		if (leave.LeaveType == "annual" || leave.LeaveType == "sick_companion") && userRole != "ceo" && userRole != "CEO" && userRole != "super_admin" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Only CEO can approve or reject annual and sick companion leaves"})
+			return
+		}
+
+		if userRole == "super_admin" || userRole == "ceo" || userRole == "CEO" {
 			// CEO/Super Admin can approve anything pending
 			canApprove = true
 			leave.CEOComment = input.Comment
+		} else if userRole == "hr" && leave.Status == "pending_hr" {
+			canApprove = true
 		} else if (userRole == "manager" || userRole == "team_leader") && leave.Status == "pending_manager" {
-			// Team Leader or Manager Approval (first stage)
-			if leave.User.ManagerID != nil && *leave.User.ManagerID == userID {
+			// Team Leader or Manager Approval (first stage) restricted to their department
+			var approver models.User
+			database.DB.First(&approver, "id = ?", userID)
+			
+			if approver.Department == leave.User.Department {
 				canApprove = true
 				if input.Status == "approved" {
-					newStatus = "pending_ceo" // Move to CEO approval
+					switch leave.PendingApprovalBy {
+					case "ceo":
+						newStatus = "pending_ceo" // Move to CEO approval
+					case "hr":
+						newStatus = "pending_hr" // Move to HR approval
+					}
 				}
 				leave.ManagerComment = input.Comment
 			}
@@ -273,12 +367,12 @@ func GetLeaveBalance(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user_id":        userID,
-		"annual_balance": 30, // 30 Calendar Days
-		"used_annual":    totalAnnual,
+		"user_id":          userID,
+		"annual_balance":   30, // 30 Calendar Days
+		"used_annual":      totalAnnual,
 		"remaining_annual": annualBalance,
-		"used_sick":      totalSick,
-		"max_sick":       182,
+		"used_sick":        totalSick,
+		"max_sick":         182,
 	})
 }
 
@@ -294,6 +388,12 @@ func GetBlackoutDates(c *gin.Context) {
 
 // CreateBlackoutDate adds a new blackout period
 func CreateBlackoutDate(c *gin.Context) {
+	role := c.GetString("userRole")
+	if role != "ceo" && role != "CEO" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Only CEO can block annual leave"})
+		return
+	}
+
 	var input struct {
 		StartDate string `json:"start_date" binding:"required"`
 		EndDate   string `json:"end_date" binding:"required"`
@@ -329,6 +429,12 @@ func CreateBlackoutDate(c *gin.Context) {
 
 // DeleteBlackoutDate removes a blackout period
 func DeleteBlackoutDate(c *gin.Context) {
+	role := c.GetString("userRole")
+	if role != "ceo" && role != "CEO" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Only CEO can unblock annual leave"})
+		return
+	}
+
 	id := c.Param("id")
 	if err := database.DB.Delete(&models.BlackoutDate{}, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete blackout date"})

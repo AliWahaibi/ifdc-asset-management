@@ -12,6 +12,12 @@ import (
 
 // GetLogs returns a paginated list of system logs
 func GetLogs(c *gin.Context) {
+	userRole := c.GetString("userRole")
+	if userRole != "super_admin" && userRole != "ceo" && userRole != "CEO" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized: System logs are restricted to CEO and Super Admin"})
+		return
+	}
+
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset := (page - 1) * limit

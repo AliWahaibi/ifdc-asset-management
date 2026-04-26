@@ -162,9 +162,9 @@ export function UsersDashboard() {
                             <button onClick={() => setViewingDoc({ url: row.cv_url, name: `${row.full_name} - CV` })} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View CV">
                                 <Eye className="h-3 w-3" />
                             </button>
-                            <button onClick={() => handleForceDownload(row.cv_url, `${row.full_name.replace(/\\s+/g, '_')}_CV.${row.cv_url.split('.').pop()}`)} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download CV">
+                            <a href={formatFileUrl(row.cv_url)} download={`${row.full_name.replace(/\\s+/g, '_')}_CV.${row.cv_url.split('.').pop()}`} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download CV">
                                 <Download className="h-3 w-3" />
-                            </button>
+                            </a>
                         </div>
                     ) : (
                         <span className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2 py-1 text-[11px] font-medium text-slate-500">
@@ -179,9 +179,9 @@ export function UsersDashboard() {
                             <button onClick={() => setViewingDoc({ url: row.id_card_url, name: `${row.full_name} - National ID` })} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-cyan-500 hover:text-white transition-all" title="View National ID">
                                 <Eye className="h-3 w-3" />
                             </button>
-                            <button onClick={() => handleForceDownload(row.id_card_url, `${row.full_name.replace(/\\s+/g, '_')}_ID.${row.id_card_url.split('.').pop()}`)} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download National ID">
+                            <a href={formatFileUrl(row.id_card_url)} download={`${row.full_name.replace(/\\s+/g, '_')}_ID.${row.id_card_url.split('.').pop()}`} className="p-1 rounded bg-slate-700 text-slate-300 hover:bg-violet-500 hover:text-white transition-all" title="Download National ID">
                                 <Download className="h-3 w-3" />
-                            </button>
+                            </a>
                         </div>
                     ) : (
                         <span className="flex items-center gap-1.5 rounded-lg bg-slate-800/50 px-2 py-1 text-[11px] font-medium text-slate-500">
@@ -379,12 +379,13 @@ export function UsersDashboard() {
                     <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 p-4 sticky top-0 z-10 backdrop-blur-sm">
                         <h3 className="text-lg font-semibold text-slate-200 truncate pr-4">{viewingDoc.name}</h3>
                         <div className="flex items-center gap-2">
-                            <button 
-                                onClick={() => handleForceDownload(viewingDoc.url, `${viewingDoc.name.replace(/\\s+/g, '_')}.${viewingDoc.url.split('.').pop()}`)} 
+                            <a 
+                                href={formatFileUrl(viewingDoc.url)} 
+                                download={`${viewingDoc.name.replace(/\\s+/g, '_')}.${viewingDoc.url.split('.').pop()}`}
                                 className="flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-400 hover:bg-cyan-500/20 transition-all"
                             >
                                 <Download className="h-4 w-4" /> <span className="hidden xl:inline">Download</span>
-                            </button>
+                            </a>
                             <button onClick={() => setViewingDoc(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
                                 <X className="h-5 w-5" />
                             </button>

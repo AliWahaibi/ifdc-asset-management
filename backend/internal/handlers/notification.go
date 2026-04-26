@@ -88,3 +88,54 @@ func MarkNotificationRead(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Notification marked as read"})
 }
+// GetNotificationSummary returns a summary of pending items for the current user (e.g. pending leaves)
+func GetNotificationSummary(c *gin.Context) {
+	userRole, _ := c.Get("role")
+	role := userRole.(string)
+
+	summary := gin.H{
+		"pending_leaves":     0,
+		"pending_users":      0,
+		"pending_admissions": 0,
+	}
+
+	switch role {
+	case "hr":
+		// HR sees pending sick and emergency leaves
+		var count int64
+		database.DB.Model(&models.LeaveRequest{}).
+			Where("status = 'pending' AND leave_type IN ?", []string{"sick", "emergency"}).
+			Count(&count)
+		summary["pending_leaves"] = count
+	case "ceo":
+		// CEO sees pending annual and special leaves
+		var count int64
+		database.DB.Model(&models.LeaveRequest{}).
+			Where("status = 'pending' AND leave_type IN ?", []string{"annual", "special"}).
+			Count(&count)
+		summary["pending_leaves"] = count
+	case "manager", "super_admin":
+		// Managers see all pending leaves
+		var leaveCount int64
+		database.DB.Model(&models.LeaveRequest{}).
+			Where("status = 'pending'").
+			Count(&leaveCount)
+		summary["pending_leaves"] = leaveCount
+
+		// Also count pending users (not approved)
+		var userCount int64
+		database.DB.Model(&models.User{}).
+			Where("is_approved = ?", false).
+			Count(&userCount)
+		summary["pending_users"] = userCount
+
+		// Count pending admissions
+		var admissionCount int64
+		database.DB.Model(&models.Admission{}).
+			Where("status = 'pending'").
+			Count(&admissionCount)
+		summary["pending_admissions"] = admissionCount
+	}
+
+	c.JSON(http.StatusOK, summary)
+}

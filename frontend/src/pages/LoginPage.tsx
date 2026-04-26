@@ -27,7 +27,7 @@ export function LoginPage() {
         }
 
         try {
-            await login(email, password);
+            await login(email.toLowerCase(), password);
             navigate(from, { replace: true });
         } catch (err: unknown) {
             if (err && typeof err === 'object' && 'response' in err) {
@@ -73,7 +73,7 @@ export function LoginPage() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@ifdc.ae"
+                                placeholder="you@ifdc.om"
                                 autoComplete="email"
                                 className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-2.5 text-sm text-slate-200 placeholder-slate-400 outline-none transition-all focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 backdrop-blur-sm"
                             />

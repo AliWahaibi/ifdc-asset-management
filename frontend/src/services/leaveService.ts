@@ -7,6 +7,11 @@ export const leaveService = {
         return response.data;
     },
 
+    getAllLeaves: async (filters?: { user_id?: string; department?: string; start_date?: string; end_date?: string }) => {
+        const response = await api.get<LeaveRequest[]>('/leaves/all', { params: filters });
+        return response.data;
+    },
+
     createLeave: async (data: { start_date: string, end_date: string, reason: string }) => {
         const response = await api.post<LeaveRequest>('/leaves', data);
         return response.data;

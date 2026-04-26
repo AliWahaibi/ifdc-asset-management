@@ -27,6 +27,8 @@ export function OfficeDashboard() {
     const { user } = useAuthStore();
     const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'manager']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
 
     const [reservationModalOpen, setReservationModalOpen] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<any>(null);
@@ -159,7 +161,7 @@ export function OfficeDashboard() {
     const fetchAssets = async () => {
         try {
             setLoading(true);
-            const data = await officeService.getAssets(1, 100);
+            const data = await officeService.getAssets(1, 100, undefined, statusFilter, categoryFilter);
             setAssets(data.data || []);
         } catch (error) {
             toast.error('Failed to load office assets');
@@ -192,6 +194,9 @@ export function OfficeDashboard() {
 
     useEffect(() => {
         fetchAssets();
+    }, [statusFilter, categoryFilter]);
+
+    useEffect(() => {
         fetchUsers();
         fetchCategories();
     }, []);
@@ -242,7 +247,7 @@ export function OfficeDashboard() {
                     </h1>
                     <p className="mt-3 text-lg text-slate-400">Track office equipment, furniture, and IT assets.</p>
                 </div>
-                {user && hasAnyRole(user.role, ['super_admin', 'manager']) && (
+                {user && user.role !== 'employee' && (
                     <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-violet-500/40 active:scale-[0.97]">
                         <Plus className="h-4 w-4" /> Add Asset
                     </button>
@@ -268,7 +273,36 @@ export function OfficeDashboard() {
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
                 </div>
             ) : (
-                <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search office assets by name or serial..." />
+                <div className="space-y-4">
+                    <div className="flex flex-wrap gap-4 items-center">
+                        <div className="w-48">
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2 text-sm text-white focus:border-violet-500 focus:outline-none transition-all appearance-none"
+                            >
+                                <option value="">All Statuses</option>
+                                <option value="available">Available</option>
+                                <option value="in_use">Assigned</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="reserved">Reserved</option>
+                            </select>
+                        </div>
+                        <div className="w-48">
+                            <select
+                                value={categoryFilter}
+                                onChange={(e) => setCategoryFilter(e.target.value)}
+                                className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2 text-sm text-white focus:border-violet-500 focus:outline-none transition-all appearance-none"
+                            >
+                                <option value="">All Categories</option>
+                                {categories.map(c => (
+                                    <option key={c.value} value={c.value}>{c.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search office assets by name or serial..." />
+                </div>
             )}
 
             <Modal isOpen={modalOpen} onClose={() => {

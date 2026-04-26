@@ -5,7 +5,8 @@ import { operationService } from '@/services/operationService';
 import { officeService } from '@/services/officeService';
 import { rndService } from '@/services/rndService';
 import { vehicleService } from '@/services/vehicleService';
-import { Calendar, User, FileText, Info, Package, Users } from 'lucide-react';
+import { reservationService } from '@/services/reservationService';
+import { Calendar, User, FileText, Info, Package, Users, Building2 } from 'lucide-react';
 
 interface TimelineEvent {
     id: string;
@@ -18,6 +19,8 @@ interface TimelineEvent {
     end_date: string;
     status: string;
     requested_assets: any[];
+    is_reservation?: boolean;
+    external_org_name?: string;
 }
 
 export function AvailabilityTimeline() {
@@ -30,8 +33,9 @@ export function AvailabilityTimeline() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [admRes, dronesRes, officeRes, rndRes, vehiclesRes] = await Promise.all([
-                    admissionService.getAdmissions(), // Get all statuses to show upcoming/pending ones
+                const [admRes, reservationsRes, dronesRes, officeRes, rndRes, vehiclesRes] = await Promise.all([
+                    admissionService.getAdmissions(),
+                    reservationService.getReservations(1, 100, 'approved'),
                     operationService.getDrones(1, 100),
                     officeService.getAssets(1, 100),
                     rndService.getAssets(1, 100),
@@ -39,7 +43,7 @@ export function AvailabilityTimeline() {
                 ]);
 
                 // Process Admissions as Timeline Items
-                const flatAdmnissions: any[] = admRes.map((adm: any) => ({
+                const flatAdmissions: TimelineEvent[] = admRes.map((adm: any) => ({
                     id: adm.id,
                     project_name: adm.project_name,
                     user_name: adm.user?.full_name || 'System User',
@@ -51,7 +55,26 @@ export function AvailabilityTimeline() {
                     status: adm.status,
                     requested_assets: adm.requested_assets || []
                 }));
-                setEvents(flatAdmnissions);
+
+                // Process Reservations as Timeline Items
+                const flatReservations: TimelineEvent[] = (reservationsRes.data || []).map((res: any) => ({
+                    id: res.id,
+                    project_name: res.asset_name || `Reservation: ${res.asset_type}`,
+                    user_name: res.is_external ? res.external_org_name : (res.user?.full_name || 'System User'),
+                    purpose: res.notes || 'Asset Reservation',
+                    start_date: res.start_date,
+                    end_date: res.end_date,
+                    status: res.status,
+                    is_reservation: true,
+                    external_org_name: res.external_org_name,
+                    requested_assets: [{
+                        asset_id: res.asset_id,
+                        asset_type: res.asset_type,
+                        asset_name: res.asset_name
+                    }]
+                }));
+
+                setEvents([...flatAdmissions, ...flatReservations]);
 
                 const aMap: Record<string, string> = {};
                 dronesRes.data?.forEach(d => aMap[d.id] = d.name);
@@ -119,8 +142,10 @@ export function AvailabilityTimeline() {
                                 {/* Sticky Left Column */}
                                 <div className="sticky left-0 z-10 w-64 shrink-0 bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 px-4 py-3 group-hover:bg-slate-800/90 transition-colors flex flex-col justify-center shadow-md">
                                     <p className="text-sm font-semibold text-slate-100 truncate pr-2">{event.project_name}</p>
-                                    <span className="inline-flex w-fit mt-1.5 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[10px] font-bold text-cyan-400 uppercase tracking-widest">
-                                        {event.assigned_to_name ? `Assigned to: ${event.assigned_to_name}` : `By: ${event.user_name}`}
+                                    <span className={`inline-flex w-fit mt-1.5 px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-widest ${
+                                        event.is_reservation ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-slate-800 border-slate-700 text-cyan-400'
+                                    }`}>
+                                        {event.is_reservation ? (event.external_org_name ? `Org: ${event.external_org_name}` : `By: ${event.user_name}`) : (event.assigned_to_name ? `Lead: ${event.assigned_to_name}` : `By: ${event.user_name}`)}
                                     </span>
                                 </div>
 
@@ -157,7 +182,11 @@ export function AvailabilityTimeline() {
 
                                             return (
                                                 <div
-                                                    className="absolute inset-y-0 bg-gradient-to-r from-cyan-500 to-indigo-600 border border-cyan-400/30 rounded-md flex items-center px-3 shadow-lg shadow-cyan-500/20 transition-all pointer-events-auto cursor-pointer overflow-hidden z-10 group/bar hover:-translate-y-0.5"
+                                                    className={`absolute inset-y-0 border rounded-md flex items-center px-3 shadow-lg transition-all pointer-events-auto cursor-pointer overflow-hidden z-10 group/bar hover:-translate-y-0.5 ${
+                                                        event.is_reservation 
+                                                        ? 'bg-gradient-to-r from-amber-500 to-orange-600 border-amber-400/30 shadow-amber-500/20' 
+                                                        : 'bg-gradient-to-r from-cyan-500 to-indigo-600 border-cyan-400/30 shadow-cyan-500/20'
+                                                    }`}
                                                     style={{ left: `${leftPerc}%`, width: `${widthPerc}%`, minWidth: '24px' }}
                                                     onClick={() => {
                                                         setSelectedEvent(event);
@@ -208,8 +237,11 @@ function AdmissionDetailModal({ isOpen, onClose, event }: { isOpen: boolean, onC
                         <h3 className="text-3xl font-black text-white tracking-tight leading-tight">{event.project_name}</h3>
                         <div className="mt-4 flex flex-col gap-2">
                             <div className="flex items-center gap-2 text-slate-400">
-                                <User className="h-4 w-4" />
-                                <p className="text-sm font-medium">Requested by <span className="text-slate-100 font-bold">{event.user_name}</span></p>
+                                {event.is_reservation && event.external_org_name ? <Building2 className="h-4 w-4" /> : <User className="h-4 w-4" />}
+                                <p className="text-sm font-medium">
+                                    {event.is_reservation ? 'Reserved by ' : 'Requested by '} 
+                                    <span className="text-slate-100 font-bold">{event.user_name}</span>
+                                </p>
                             </div>
                             {event.assigned_to_name && (
                                 <div className="flex items-center gap-2 text-cyan-400">

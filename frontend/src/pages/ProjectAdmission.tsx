@@ -128,7 +128,8 @@ export function ProjectAdmission() {
         const fetchUsers = async () => {
             setLoadingUsers(true);
             try {
-                const response = await userService.getUsers(1, 100);
+                // Task 16: The dropdown for assigning users must fetch the full list of users
+                const response = await userService.getUsers(1, 10000);
                 setUsers(response.data);
             } catch (error) {
                 console.error('Failed to fetch users', error);
@@ -360,7 +361,10 @@ export function ProjectAdmission() {
                             </span>
                             <button
                                 type="button"
-                                onClick={() => setIsScannerOpen(true)}
+                                onClick={() => {
+                                    console.log("Scanner button clicked");
+                                    setIsScannerOpen(true);
+                                }}
                                 className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-slate-700 transition-all border border-slate-700 hover:border-cyan-500/50 group"
                             >
                                 <Camera className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"ifdc-backend/internal/database"
@@ -36,6 +37,52 @@ func generateToken(userID string, role string, expiry time.Duration) (string, er
 	return token.SignedString([]byte(secret))
 }
 
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" binding:"required"`
+	NewPassword     string `json:"newPassword" binding:"required,min=6,max=255"`
+}
+
+func ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect current password"})
+		return
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	user.PasswordHash = string(hashed)
+	if err := database.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		return
+	}
+
+	database.CreateLog("INFO", "Password Changed", "User changed their password", &user.ID)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password updated successfully"})
+}
+
 func Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -44,6 +91,7 @@ func Login(c *gin.Context) {
 	}
 
 	var user models.User
+	req.Email = strings.ToLower(req.Email)
 	if err := database.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
@@ -75,7 +123,7 @@ func Login(c *gin.Context) {
 
 	// Set HttpOnly Cookies for tokens
 	isRelease := gin.Mode() == gin.ReleaseMode
-	
+
 	c.SetCookie("access_token", accessToken, 24*3600, "/", "", isRelease, true)
 	c.SetCookie("refresh_token", refreshToken, 7*24*3600, "/", "", isRelease, true)
 

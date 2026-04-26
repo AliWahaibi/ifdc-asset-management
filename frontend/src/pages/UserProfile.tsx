@@ -37,6 +37,12 @@ export function UserProfile() {
         other_certificate: null as FileList | null,
     });
 
+    const [passwordData, setPasswordData] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+    });
+
     const [viewerState, setViewerState] = useState({
         isOpen: false,
         url: null as string | null,
@@ -175,6 +181,29 @@ export function UserProfile() {
         }
     };
 
+    const handlePasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            toast.error("Passwords do not match");
+            return;
+        }
+        if (!passwordData.currentPassword || !passwordData.newPassword) {
+            toast.error("Please fill in all password fields");
+            return;
+        }
+        
+        setLoading(true);
+        try {
+            await userService.changePassword(passwordData.currentPassword, passwordData.newPassword);
+            toast.success("Password changed successfully!");
+            setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to change password");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (!currentUser || (loading && !viewedUser)) return (
         <div className="flex h-[60vh] items-center justify-center">
             <div className="flex flex-col items-center gap-4">
@@ -239,10 +268,10 @@ export function UserProfile() {
                         <input 
                             required 
                             type="text" 
-                            readOnly={!canEdit}
+                            readOnly={true}
                             value={formData.full_name} 
                             onChange={e => setFormData({ ...formData, full_name: e.target.value })} 
-                            className={`w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 ${!canEdit ? 'opacity-70 cursor-not-allowed' : ''}`} 
+                            className={`w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed`} 
                         />
                     </div>
                     <div>
@@ -264,10 +293,10 @@ export function UserProfile() {
                     <div>
                         <label className="mb-2 block text-sm font-medium text-slate-200">Department</label>
                         <select 
-                            disabled={!canEdit}
+                            disabled={true}
                             value={formData.department}
                             onChange={e => setFormData({ ...formData, department: e.target.value })}
-                            className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 disabled:opacity-70"
+                            className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed"
                         >
                             <option value="">Select Department</option>
                             <option value="Operation">Operation</option>
@@ -462,6 +491,52 @@ export function UserProfile() {
                     </div>
                 )}
             </form>
+
+            {/* Password Change Section */}
+            {isOwnProfile && (
+                <div className="mt-8 rounded-2xl border border-slate-700/50 bg-slate-900/50 p-6 backdrop-blur-xl">
+                    <h3 className="mb-4 text-base font-semibold text-white flex items-center gap-2">
+                        <Shield className="h-5 w-5 text-violet-400" />
+                        Change Password
+                    </h3>
+                    <form onSubmit={handlePasswordChange} className="space-y-4">
+                        <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-200">Current Password</label>
+                            <input 
+                                type="password" 
+                                value={passwordData.currentPassword} 
+                                onChange={e => setPasswordData({ ...passwordData, currentPassword: e.target.value })} 
+                                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" 
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">New Password</label>
+                                <input 
+                                    type="password" 
+                                    value={passwordData.newPassword} 
+                                    onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })} 
+                                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" 
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-200">Confirm New Password</label>
+                                <input 
+                                    type="password" 
+                                    value={passwordData.confirmPassword} 
+                                    onChange={e => setPasswordData({ ...passwordData, confirmPassword: e.target.value })} 
+                                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-200 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500" 
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end pt-2">
+                            <button type="submit" disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-violet-500 disabled:opacity-50">
+                                Update Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             {/* Assigned Assets Section */}
             <div className="space-y-4 pt-10 border-t border-slate-700/50">

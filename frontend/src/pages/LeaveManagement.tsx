@@ -167,8 +167,8 @@ export function LeaveManagement() {
             sortable: false,
             render: (row) => {
                 const isPending = row.status === 'pending_manager' || row.status === 'pending_ceo';
-                const canApprove = (user?.role === 'super_admin' || user?.role === 'ceo') || 
-                                 (['manager', 'team_leader'].includes(user?.role || '') && row.status === 'pending_manager' && row.user?.manager_id === user?.id);
+                const canApprove = (user?.role === 'super_admin' || user?.role === 'ceo' || user?.role === 'CEO') || 
+                                 (['manager', 'team_leader'].includes(user?.role || '') && row.status === 'pending_manager' && row.user?.department === user?.department);
                 
                 return (
                     <div className="flex gap-2">
@@ -223,7 +223,7 @@ export function LeaveManagement() {
                         <Calendar className="h-16 w-16 text-cyan-400" />
                     </div>
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Annual Balance</p>
-                    <h3 className="text-3xl font-black text-white mt-1">23 <span className="text-sm font-medium text-slate-400 tracking-normal italic">working days</span></h3>
+                    <h3 className="text-3xl font-black text-white mt-1">{balance?.annual_balance || 30} <span className="text-sm font-medium text-slate-400 tracking-normal italic">working days</span></h3>
                     <div className="mt-4 flex items-center gap-2 text-[10px] text-cyan-400/70">
                         <Info className="h-3 w-3" />
                         Excludes Fri-Sat weekend (Oman)
@@ -239,7 +239,7 @@ export function LeaveManagement() {
                     <div className="mt-4 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                         <div 
                             className="h-full bg-violet-500 transition-all duration-1000"
-                            style={{ width: `${((balance?.used_annual || 0) / 30) * 100}%` }}
+                            style={{ width: `${((balance?.used_annual || 0) / (balance?.annual_balance || 30)) * 100}%` }}
                         />
                     </div>
                 </div>
@@ -313,6 +313,7 @@ export function LeaveManagement() {
                             <option value="annual">Annual Leave</option>
                             <option value="sick">Sick Leave</option>
                             <option value="emergency">Emergency Leave</option>
+                            <option value="sick_companion">Sick Companion Leave</option>
                             <option value="special">Special Leave</option>
                         </select>
                     </div>

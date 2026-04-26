@@ -22,8 +22,22 @@ func RBACMiddleware() gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.Request.URL.Path
 
-		// Managers, Super Admins, & CEOs: full CRUD access
-		if role == "super_admin" || role == "manager" || role == "ceo" {
+		// Super Admins & CEOs: full CRUD access to global system
+		if role == "super_admin" || role == "ceo" || role == "CEO" {
+			c.Next()
+			return
+		}
+
+		// Managers: CRUD access restricted to their department scope (enforced in handlers)
+		// They are blocked from global system administration paths
+		if role == "manager" {
+			globalAdminPaths := []string{"/api/logs", "/api/settings", "/api/statistics/global"}
+			for _, p := range globalAdminPaths {
+				if strings.HasPrefix(path, p) {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Manager role restricted from global system administration"})
+					return
+				}
+			}
 			c.Next()
 			return
 		}
@@ -71,7 +85,7 @@ func RBACMiddleware() gin.HandlerFunc {
 					"/api/notifications/read",
 					"/api/leaves",
 				}
-				
+
 				isAllowed := false
 				for _, p := range allowedPosts {
 					if path == p || strings.HasPrefix(path, p+"/") {
@@ -84,7 +98,7 @@ func RBACMiddleware() gin.HandlerFunc {
 					c.Next()
 					return
 				}
-				
+
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Team Leaders are restricted from creating these resources"})
 				return
 			}
@@ -117,6 +131,12 @@ func RBACMiddleware() gin.HandlerFunc {
 
 		// Employees: GET and specific POST
 		if role == "employee" {
+			// Task 9: Employees Cannot Add Assets (Backend POST /api/assets 403 Forbidden)
+			if method == http.MethodPost && strings.HasSuffix(path, "/assets") {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Employees are restricted from adding assets"})
+				return
+			}
+
 			if method == http.MethodGet {
 				if strings.HasPrefix(path, "/api/users") {
 					// Exception: Allow seeing own profile or own user ID
@@ -162,6 +182,30 @@ func RBACMiddleware() gin.HandlerFunc {
 func BodyLimiter(limit int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		c.Next()
+	}
+}
+
+// RequireAdmin enforces that only Super Admin, CEO, or HR can access the endpoint
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role := c.GetString("userRole")
+		if role != "super_admin" && role != "ceo" && role != "CEO" && role != "hr" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Admin access required"})
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireCEO enforces that only the CEO can access the endpoint
+func RequireCEO() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role := c.GetString("userRole")
+		if role != "ceo" && role != "CEO" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: CEO access required"})
+			return
+		}
 		c.Next()
 	}
 }

@@ -155,7 +155,7 @@ export interface RndAsset {
 
 export interface Reservation {
     id: string;
-    user_id: string;
+    user_id?: string;
     user?: User;
     asset_type: AssetType;
     asset_id: string;
@@ -168,6 +168,9 @@ export interface Reservation {
     start_date: string;
     end_date: string;
     notes: string;
+    is_external: boolean;
+    external_org_name?: string;
+    external_contact_email?: string;
     rejection_reason?: string;
     project?: {
         name: string;

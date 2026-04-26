@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { AlertTriangle } from 'lucide-react';
 
 interface BarcodeScannerProps {
@@ -12,12 +12,12 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScanSuccess, o
     const [cameraError, setCameraError] = useState<string | null>(null);
 
     useEffect(() => {
-        let scanner: Html5QrcodeScanner | null = null;
-
-        try {
-            scanner = new Html5QrcodeScanner(
-                "reader",
-                { 
+        console.log("BarcodeScanner component mounted - initializing Html5Qrcode");
+        const html5QrCode = new Html5Qrcode("reader");
+        
+        const startScanner = async () => {
+            try {
+                const config = { 
                     fps: 10, 
                     qrbox: { width: 250, height: 250 },
                     aspectRatio: 1.0,
@@ -28,41 +28,55 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScanSuccess, o
                         Html5QrcodeSupportedFormats.EAN_13,
                         Html5QrcodeSupportedFormats.EAN_8,
                     ]
-                },
-                /* verbose= */ false
-            );
+                };
 
-            const successCallback = (decodedText: string) => {
-                scanner?.clear().then(() => {
-                    onScanSuccess(decodedText);
-                }).catch(error => {
-                    console.error("Failed to clear scanner", error);
-                    onScanSuccess(decodedText);
-                });
-            };
-
-            const errorCallback = (errorMessage: string) => {
-                // Only forward non-transient scan errors
-                if (onScanError) onScanError(errorMessage);
-            };
-
-            scanner.render(successCallback, errorCallback);
-        } catch (err: any) {
-            const errorMsg = err?.message || String(err);
-            
-            if (errorMsg.includes('NotAllowedError') || errorMsg.includes('Permission')) {
-                setCameraError('Camera permission denied. Please allow camera access in your browser settings and try again.');
-            } else if (errorMsg.includes('NotFoundError') || errorMsg.includes('no camera')) {
-                setCameraError('No camera found on this device. Please connect a camera and try again.');
-            } else if (errorMsg.includes('insecure') || errorMsg.includes('https')) {
-                setCameraError('Camera access requires a secure connection (HTTPS). Please access this page over HTTPS to use the scanner.');
-            } else {
-                setCameraError(`Scanner initialization failed: ${errorMsg}`);
+                console.log("Starting scanner with config:", config);
+                
+                await html5QrCode.start(
+                    { facingMode: "environment" }, 
+                    config,
+                    (decodedText: string) => {
+                        console.log("QR Scan Success:", decodedText);
+                        html5QrCode.stop().then(() => {
+                            onScanSuccess(decodedText);
+                        }).catch((err: any) => {
+                            console.error("Error stopping scanner after success:", err);
+                            onScanSuccess(decodedText);
+                        });
+                    },
+                    (errorMessage: string) => {
+                        // Frequent transient errors are normal during scanning
+                        // But we log them to help debug if it stays silent
+                        if (onScanError) {
+                            console.log("QR Error:", errorMessage);
+                            onScanError(errorMessage);
+                        }
+                    }
+                );
+                console.log("Scanner started successfully");
+            } catch (err: any) {
+                console.error("QR Initialization Error:", err);
+                const errorMsg = err?.message || String(err);
+                
+                if (errorMsg.includes('NotAllowedError') || errorMsg.includes('Permission')) {
+                    setCameraError('Camera permission denied. Please allow camera access in your browser settings and try again.');
+                } else if (errorMsg.includes('NotFoundError') || errorMsg.includes('no camera')) {
+                    setCameraError('No camera found on this device. Please connect a camera and try again.');
+                } else if (errorMsg.includes('insecure') || errorMsg.includes('https')) {
+                    setCameraError('Camera access requires a secure connection (HTTPS). Please access this page over HTTPS to use the scanner.');
+                } else {
+                    setCameraError(`Scanner initialization failed: ${errorMsg}`);
+                }
             }
-        }
+        };
+
+        startScanner();
 
         return () => {
-            scanner?.clear().catch(err => console.error("Scanner cleanup error", err));
+            console.log("Cleaning up BarcodeScanner");
+            if (html5QrCode.isScanning) {
+                html5QrCode.stop().catch((err: any) => console.error("Scanner cleanup error", err));
+            }
         };
     }, [onScanSuccess, onScanError]);
 

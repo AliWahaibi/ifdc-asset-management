@@ -17,9 +17,9 @@ export interface CreateOfficeAssetData {
 export type UpdateOfficeAssetData = Partial<CreateOfficeAssetData>;
 
 export const officeService = {
-    getAssets: async (page = 1, limit = 10, search?: string): Promise<PaginatedResponse<OfficeAsset>> => {
+    getAssets: async (page = 1, limit = 10, search?: string, status?: string, category?: string): Promise<PaginatedResponse<OfficeAsset>> => {
         const response = await apiClient.get<PaginatedResponse<OfficeAsset>>('/office/assets', {
-            params: { page, limit, search }
+            params: { page, limit, search, status, category }
         });
         return response.data;
     },

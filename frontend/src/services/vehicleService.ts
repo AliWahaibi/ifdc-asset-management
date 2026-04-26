@@ -32,9 +32,9 @@ export interface CreateVehicleAssetData {
 export type UpdateVehicleAssetData = Partial<CreateVehicleAssetData>;
 
 export const vehicleService = {
-    getAssets: async (page = 1, limit = 10, search?: string): Promise<PaginatedResponse<VehicleAsset>> => {
+    getAssets: async (page = 1, limit = 10, search?: string, status?: string): Promise<PaginatedResponse<VehicleAsset>> => {
         const response = await apiClient.get<PaginatedResponse<VehicleAsset>>('/vehicles/assets', {
-            params: { page, limit, search }
+            params: { page, limit, search, status }
         });
         return response.data;
     },

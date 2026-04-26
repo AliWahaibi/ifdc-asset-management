@@ -55,6 +55,7 @@ func SetupRouter() *gin.Engine {
 		{
 			auth.POST("/login", handlers.Login)
 			auth.POST("/refresh", handlers.RefreshToken)
+			auth.POST("/change-password", middleware.RequireAuth(), handlers.ChangePassword)
 		}
 
 		// Users group
@@ -66,7 +67,7 @@ func SetupRouter() *gin.Engine {
 
 			// GET /api/users to return mock users list
 			users.GET("", handlers.GetUsers)
-			
+
 			// GET /api/users/:id to return specific user
 			users.GET("/:id", handlers.GetUser)
 			// POST /api/users to handle multipart form data
@@ -155,8 +156,8 @@ func SetupRouter() *gin.Engine {
 			settings.GET("", handlers.GetSettings)
 			settings.PUT("", handlers.UpdateSettings)
 			settings.GET("/blackout-dates", handlers.GetBlackoutDates)
-			settings.POST("/blackout-dates", handlers.CreateBlackoutDate)
-			settings.DELETE("/blackout-dates/:id", handlers.DeleteBlackoutDate)
+			settings.POST("/blackout-dates", middleware.RequireCEO(), handlers.CreateBlackoutDate)
+			settings.DELETE("/blackout-dates/:id", middleware.RequireCEO(), handlers.DeleteBlackoutDate)
 		}
 
 		// Statistics & Analytics
@@ -171,7 +172,14 @@ func SetupRouter() *gin.Engine {
 		notifications.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			notifications.GET("", handlers.GetNotifications)
+			notifications.GET("/summary", handlers.GetNotificationSummary)
 			notifications.PATCH("/:id/read", handlers.MarkNotificationRead)
+		}
+
+		public := api.Group("/public")
+		{
+			public.POST("/reserve", handlers.CreateExternalReservation)
+			public.GET("/assets/list", handlers.GetAvailableAssetsPublic)
 		}
 
 		// Leaves group
@@ -179,6 +187,7 @@ func SetupRouter() *gin.Engine {
 		leaves.Use(middleware.RequireAuth(), middleware.RBACMiddleware())
 		{
 			leaves.GET("", handlers.GetLeaveRequests)
+			leaves.GET("/all", middleware.RequireAdmin(), handlers.GetAllLeaves)
 			leaves.POST("", handlers.CreateLeaveRequest)
 			leaves.PATCH("/:id/status", handlers.UpdateLeaveStatus)
 			leaves.GET("/balance", handlers.GetLeaveBalance)

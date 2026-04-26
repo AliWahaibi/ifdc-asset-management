@@ -82,7 +82,9 @@ func CheckAssetAvailability(c *gin.Context) {
 
 	// 2. Office Assets
 	var office []models.OfficeAsset
-	database.DB.Find(&office)
+	// Task 11: Hide Office Assets from Admissions/Reservations
+	// Update the API endpoint that fetches "Available Assets" for reservations to include a database filter: WHERE category != 'office'.
+	database.DB.Where("category != ?", "office").Find(&office)
 	for _, o := range office {
 		allAssets = append(allAssets, checkOverlaps(o.ID, "office", o.Name, o.SerialNumber, o.ReferenceNumber))
 	}

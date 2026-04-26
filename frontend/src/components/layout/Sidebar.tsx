@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { apiClient } from '@/lib/api';
 import { hasAnyRole } from '@/lib/roles';
 import { ROLE_LABELS } from '@/lib/roles';
 import type { UserRole } from '@/types';
@@ -21,7 +23,6 @@ import {
     Car,
     Plus,
 } from 'lucide-react';
-import { useState } from 'react';
 import mainLogo from '@/assets/Asset 2.png';
 
 interface NavItem {
@@ -66,7 +67,7 @@ const NAV_ITEMS: NavItem[] = [
         label: 'Admission Requests',
         path: '/admissions-list',
         icon: <Briefcase className="h-5 w-5" />,
-        roles: ['super_admin', 'manager', 'team_leader'],
+        roles: ['super_admin', 'manager', 'team_leader', 'ceo'],
     },
     {
         label: 'Calendar',
@@ -79,6 +80,12 @@ const NAV_ITEMS: NavItem[] = [
         icon: <CalendarCheck className="h-5 w-5" />,
     },
     {
+        label: 'Admin Leave Dashboard',
+        path: '/admin/leaves',
+        icon: <Calendar className="h-5 w-5" />,
+        roles: ['super_admin', 'ceo', 'hr'],
+    },
+    {
         label: 'AI Assistant',
         path: '/ai-assistant',
         icon: <Bot className="h-5 w-5" />,
@@ -87,25 +94,25 @@ const NAV_ITEMS: NavItem[] = [
         label: 'Analytics',
         path: '/statistics',
         icon: <PieChart className="h-5 w-5" />,
-        roles: ['super_admin', 'manager'],
+        roles: ['super_admin', 'ceo'],
     },
     {
         label: 'User Management',
         path: '/users',
         icon: <Users className="h-5 w-5" />,
-        roles: ['super_admin', 'manager'],
+        roles: ['super_admin', 'ceo'],
     },
     {
         label: 'System Logs',
         path: '/logs',
         icon: <Shield className="h-5 w-5" />,
-        roles: ['super_admin', 'manager'],
+        roles: ['super_admin', 'ceo'],
     },
     {
         label: 'Settings',
         path: '/settings',
         icon: <Settings className="h-5 w-5" />,
-        roles: ['super_admin', 'manager'],
+        roles: ['super_admin', 'ceo'],
     },
 ];
 
@@ -118,6 +125,28 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const { user } = useAuthStore();
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(false);
+    const [counts, setCounts] = useState<{ pending_leaves: number; pending_users: number; pending_admissions: number }>({ 
+        pending_leaves: 0, 
+        pending_users: 0, 
+        pending_admissions: 0 
+    });
+
+    useEffect(() => {
+        const fetchSummary = async () => {
+            try {
+                const response = await apiClient.get('/notifications/summary');
+                setCounts(response.data);
+            } catch (error) {
+                console.error('Failed to fetch notification summary:', error);
+            }
+        };
+
+        if (user) {
+            fetchSummary();
+            const interval = setInterval(fetchSummary, 60000); // Update every minute
+            return () => clearInterval(interval);
+        }
+    }, [user]);
 
     if (!user) return null;
 
@@ -172,6 +201,24 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                                         <span className={`shrink-0 transition-colors ${isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-300'}`}>
                                             {item.icon}
                                         </span>
+                                        {item.path === '/admin/leaves' && counts.pending_leaves > 0 && (
+                                            <span className="absolute left-6 top-3 flex h-2 w-2">
+                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                                                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                                            </span>
+                                        )}
+                                        {item.path === '/users' && counts.pending_users > 0 && (
+                                            <span className="absolute left-6 top-3 flex h-2 w-2">
+                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                                                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                                            </span>
+                                        )}
+                                        {item.path === '/admissions-list' && counts.pending_admissions > 0 && (
+                                            <span className="absolute left-6 top-3 flex h-2 w-2">
+                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                                                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                                            </span>
+                                        )}
                                         {!collapsed && <span className="truncate">{item.label}</span>}
                                     </NavLink>
                                 </li>

@@ -15,16 +15,16 @@ export interface CreateDroneData {
 export type UpdateDroneData = Partial<CreateDroneData>;
 
 export const operationService = {
-    getDrones: async (page = 1, limit = 10, search?: string): Promise<PaginatedResponse<DroneAsset>> => {
+    getDrones: async (page = 1, limit = 10, search?: string, status?: string, model?: string): Promise<PaginatedResponse<DroneAsset>> => {
         const response = await apiClient.get<PaginatedResponse<DroneAsset>>('/operations/drones', {
-            params: { page, limit, search }
+            params: { page, limit, search, status, model }
         });
         return response.data;
     },
 
-    getAssetsUnified: async (search?: string): Promise<{ data: any[], total: number }> => {
+    getAssetsUnified: async (search?: string, status?: string, type?: string): Promise<{ data: any[], total: number }> => {
         const response = await apiClient.get<{ data: any[], total: number }>('/operations/assets', {
-            params: { search }
+            params: { search, status, type }
         });
         return response.data;
     },

@@ -165,7 +165,23 @@ func GetAdmissions(c *gin.Context) {
 	search := c.Query("search")
 	var admissions []models.Admission
 	
+	userID := c.GetString("userID")
+	userRole := c.GetString("userRole")
+
+	var currentUser models.User
+	database.DB.Select("department").First(&currentUser, "id = ?", userID)
+
 	query := database.DB.Preload("User").Preload("AssignedTo").Preload("Companions").Preload("RequestedAssets").Order("created_at desc")
+
+	// Task 16: Team Allocation Visibility in Admissions
+	// Scoping: Managers restricted to department; Employees restricted to self+department view (if applicable)
+	if userRole != "super_admin" && userRole != "ceo" && userRole != "CEO" && userRole != "hr" {
+		query = query.Where(
+			"user_id = ? OR assigned_to_id = ? OR id IN (SELECT admission_id FROM admission_companions WHERE user_id = ?) OR user_id IN (SELECT id FROM users WHERE department = ?)",
+			userID, userID, userID, currentUser.Department,
+		)
+	}
+
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -219,9 +235,30 @@ func UpdateAdmissionStatus(c *gin.Context) {
 	tx := database.DB.Begin()
 
 	var admission models.Admission
-	if err := tx.Preload("RequestedAssets").First(&admission, "id = ?", id).Error; err != nil {
+	if err := tx.Preload("User").Preload("RequestedAssets").First(&admission, "id = ?", id).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusNotFound, gin.H{"error": "Admission not found"})
+		return
+	}
+
+	// Authorization Check: CEO/Admin Global, Manager Departmental
+	userID := c.GetString("userID")
+	userRole := c.GetString("userRole")
+	canUpdate := false
+	switch userRole {
+	case "super_admin", "ceo", "CEO":
+		canUpdate = true
+	case "manager":
+		var manager models.User
+		database.DB.First(&manager, "id = ?", userID)
+		if manager.Department == admission.User.Department {
+			canUpdate = true
+		}
+	}
+
+	if !canUpdate {
+		tx.Rollback()
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to update this admission request"})
 		return
 	}
 
@@ -262,7 +299,7 @@ func UpdateAdmissionStatus(c *gin.Context) {
 
 			// Also create a reservation entry to block the timeline
 			res := models.Reservation{
-				UserID:    admission.UserID,
+				UserID:    &admission.UserID,
 				AssetType: ra.AssetType,
 				AssetID:   ra.AssetID,
 				StartDate: admission.StartDate,

@@ -24,6 +24,8 @@ export function RndDashboard() {
     const { user } = useAuthStore();
     const canEdit = user ? hasAnyRole(user.role, ['super_admin', 'manager']) : false;
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState('');
+    const [typeFilter, setTypeFilter] = useState('');
 
     const [suggestions, setSuggestions] = useState<string[]>([]);
 
@@ -145,7 +147,7 @@ export function RndDashboard() {
     const fetchAssets = async () => {
         try {
             setLoading(true);
-            const data = await rndService.getAssets(1, 100);
+            const data = await rndService.getAssets(1, 100, undefined, statusFilter, typeFilter);
             setAssets(data.data || []);
         } catch (error) {
             toast.error('Failed to load R&D assets');
@@ -163,6 +165,9 @@ export function RndDashboard() {
 
     useEffect(() => {
         fetchAssets();
+    }, [statusFilter, typeFilter]);
+
+    useEffect(() => {
         fetchSuggestions();
     }, []);
 
@@ -286,7 +291,36 @@ export function RndDashboard() {
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
                 </div>
             ) : (
-                <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search equipment by name or serial..." />
+                <div className="space-y-4">
+                    <div className="flex flex-wrap gap-4 items-center">
+                        <div className="w-48">
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none transition-all appearance-none"
+                            >
+                                <option value="">All Statuses</option>
+                                <option value="available">Available</option>
+                                <option value="in_use">In Use</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="reserved">Reserved</option>
+                            </select>
+                        </div>
+                        <div className="w-48">
+                            <select
+                                value={typeFilter}
+                                onChange={(e) => setTypeFilter(e.target.value)}
+                                className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none transition-all appearance-none"
+                            >
+                                <option value="">All Types</option>
+                                {suggestions.map(t => (
+                                    <option key={t} value={t}>{t.toUpperCase()}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <DataTable columns={columns} data={assets} keyExtractor={(row) => row.id} searchPlaceholder="Search equipment by name or serial..." />
+                </div>
             )}
 
             <Modal isOpen={modalOpen} onClose={() => {

@@ -114,7 +114,7 @@ func CreateReservation(c *gin.Context) {
 	}
 
 	res := models.Reservation{
-		UserID:    userID,
+		UserID:    &userID,
 		AssetType: req.AssetType,
 		AssetID:   req.AssetID,
 		Status:    "pending",
@@ -147,7 +147,7 @@ func CreateReservation(c *gin.Context) {
 
 	// Trigger 1 (Notify Admins)
 	var requestor models.User
-	database.DB.First(&requestor, "id = ?", res.UserID)
+	database.DB.First(&requestor, "id = ?", *res.UserID)
 
 	var assetName string
 	switch res.AssetType {
@@ -157,6 +157,8 @@ func CreateReservation(c *gin.Context) {
 		database.DB.Model(&models.OfficeAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&assetName)
 	case "rnd":
 		database.DB.Model(&models.RndAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&assetName)
+	case "vehicle":
+		database.DB.Model(&models.VehicleAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&assetName)
 	}
 
 	var admins []models.User
@@ -173,6 +175,94 @@ func CreateReservation(c *gin.Context) {
 	// Log the asset request
 	logDetails := fmt.Sprintf("User %s (%s) requested asset %s (%s)", requestor.FullName, requestor.Email, assetName, res.AssetID)
 	database.CreateLog("INFO", "Asset Requested", logDetails, &userID)
+
+	c.JSON(http.StatusCreated, res)
+}
+
+// CreateExternalReservation allows non-logged in users to request assets
+func CreateExternalReservation(c *gin.Context) {
+	var req struct {
+		AssetType            string `json:"asset_type" binding:"required"`
+		AssetID              string `json:"asset_id" binding:"required"`
+		StartDate            string `json:"start_date" binding:"required"`
+		EndDate              string `json:"end_date" binding:"required"`
+		Notes                string `json:"notes"`
+		ExternalOrgName      string `json:"external_org_name" binding:"required"`
+		ExternalContactEmail string `json:"external_contact_email" binding:"required,email"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Parse dates
+	start, err := time.Parse(time.RFC3339, req.StartDate)
+	if err != nil {
+		start, _ = time.Parse(time.DateTime, req.StartDate)
+	}
+	end, err := time.Parse(time.RFC3339, req.EndDate)
+	if err != nil {
+		end, _ = time.Parse(time.DateTime, req.EndDate)
+	}
+
+	res := models.Reservation{
+		AssetType:            req.AssetType,
+		AssetID:              req.AssetID,
+		Status:               "pending",
+		StartDate:            start,
+		EndDate:              end,
+		Notes:                req.Notes,
+		IsExternal:           true,
+		ExternalOrgName:      req.ExternalOrgName,
+		ExternalContactEmail: req.ExternalContactEmail,
+	}
+
+	// Overlap check
+	var count int64
+	overlapQuery := `
+		SELECT count(*) FROM reservations 
+		WHERE asset_id = ? AND status IN ('approved', 'pending') 
+		AND (start_date <= ? AND end_date >= ?)
+	`
+	if err := database.DB.Raw(overlapQuery, req.AssetID, end, start).Scan(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate availability"})
+		return
+	}
+
+	if count > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Asset is already reserved for these dates."})
+		return
+	}
+
+	if err := database.DB.Create(&res).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create external request"})
+		return
+	}
+
+	// Notify Admins
+	var assetName string
+	switch res.AssetType {
+	case "drone":
+		database.DB.Model(&models.DroneAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&assetName)
+	case "office":
+		database.DB.Model(&models.OfficeAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&assetName)
+	case "rnd":
+		database.DB.Model(&models.RndAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&assetName)
+	case "vehicle":
+		database.DB.Model(&models.VehicleAsset{}).Select("name").Where("id = ?", res.AssetID).Scan(&assetName)
+	}
+
+	var admins []models.User
+	database.DB.Where("role IN ?", []string{"super_admin", "manager"}).Find(&admins)
+
+	for _, admin := range admins {
+		database.DB.Create(&models.Notification{
+			UserID:  admin.ID,
+			Title:   "New External Asset Request",
+			Message: fmt.Sprintf("%s (%s) requested %s.", res.ExternalOrgName, res.ExternalContactEmail, assetName),
+		})
+	}
 
 	c.JSON(http.StatusCreated, res)
 }
@@ -254,25 +344,25 @@ func UpdateReservationStatus(c *gin.Context) {
 		statusText = req.Status
 	}
 
-	if req.Status == "approved" || req.Status == "rejected" {
+	if (req.Status == "approved" || req.Status == "rejected") && res.UserID != nil {
 		database.DB.Create(&models.Notification{
-			UserID:  res.UserID,
+			UserID:  *res.UserID,
 			Title:   "Request Update",
 			Message: fmt.Sprintf("Your request for %s has been %s.", assetName, statusText),
 		})
+	}
 
-		// Log the reservation update
-		var admin models.User
-		if err := database.DB.First(&admin, "id = ?", adminID).Error; err == nil {
-			logLevel := "INFO"
-			if req.Status == "rejected" {
-				logLevel = "WARNING"
-			}
-			logAction := fmt.Sprintf("Reservation %s", statusText)
-			logDetails := fmt.Sprintf("Admin %s (%s) %s the reservation for asset %s (%s)", admin.FullName, admin.Email, req.Status, assetName, res.AssetID)
-
-			database.CreateLog(logLevel, logAction, logDetails, &adminID)
+	// Log the reservation update
+	var admin models.User
+	if err := database.DB.First(&admin, "id = ?", adminID).Error; err == nil {
+		logLevel := "INFO"
+		if req.Status == "rejected" {
+			logLevel = "WARNING"
 		}
+		logAction := fmt.Sprintf("Reservation %s", statusText)
+		logDetails := fmt.Sprintf("Admin %s (%s) %s the reservation for asset %s (%s)", admin.FullName, admin.Email, req.Status, assetName, res.AssetID)
+
+		database.CreateLog(logLevel, logAction, logDetails, &adminID)
 	}
 
 	c.JSON(http.StatusOK, res)

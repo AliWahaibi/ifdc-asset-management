@@ -22,6 +22,8 @@ const ProjectAdmission = lazy(() => import('@/pages/ProjectAdmission').then(m =>
 const ProjectAdmissionsList = lazy(() => import('@/pages/ProjectAdmissionsList').then(m => ({ default: m.ProjectAdmissionsList })));
 const VehiclesManagement = lazy(() => import('@/pages/VehiclesManagement').then(m => ({ default: m.VehiclesManagement })));
 const LeaveManagement = lazy(() => import('@/pages/LeaveManagement').then(m => ({ default: m.LeaveManagement })));
+const AdminLeaveDashboard = lazy(() => import('@/pages/AdminLeaveDashboard').then(m => ({ default: m.AdminLeaveDashboard })));
+const ExternalReservation = lazy(() => import('@/pages/ExternalReservation').then(m => ({ default: m.ExternalReservation })));
 
 export function App() {
     return (
@@ -38,6 +40,7 @@ export function App() {
                     {/* Public Routes */}
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/unauthorized" element={<UnauthorizedPage />} />
+                    <Route path="/public/reserve" element={<ExternalReservation />} />
 
                     {/* Protected Routes — wrapped in DashboardLayout */}
                     <Route
@@ -54,6 +57,11 @@ export function App() {
                         <Route path="/profile" element={<UserProfile />} />
                         <Route path="/users/:id" element={<UserProfile />} />
                         <Route path="/leaves" element={<LeaveManagement />} />
+                        <Route path="/admin/leaves" element={
+                            <ProtectedRoute allowedRoles={['super_admin', 'ceo', 'hr']}>
+                                <AdminLeaveDashboard />
+                            </ProtectedRoute>
+                        } />
                         <Route path="/admission" element={<ProjectAdmission />} />
                         <Route path="/admissions-list" element={<ProjectAdmissionsList />} />
 
@@ -98,41 +106,41 @@ export function App() {
                         />
 
 
-                        {/* User Management — Super Admin, Manager, CEO, HR */}
+                        {/* User Management — Super Admin, CEO, HR */}
                         <Route
                             path="/users"
                             element={
-                                <ProtectedRoute allowedRoles={['manager', 'super_admin', 'ceo', 'hr']}>
+                                <ProtectedRoute allowedRoles={['super_admin', 'ceo', 'hr']}>
                                     <UsersDashboard />
                                 </ProtectedRoute>
                             }
                         />
 
-                        {/* System Settings — Super Admin, Manager, CEO */}
+                        {/* System Settings — Super Admin, CEO */}
                         <Route
                             path="/settings"
                             element={
-                                <ProtectedRoute allowedRoles={['manager', 'super_admin', 'ceo']}>
+                                <ProtectedRoute allowedRoles={['super_admin', 'ceo']}>
                                     <SystemSettings />
                                 </ProtectedRoute>
                             }
                         />
 
-                        {/* System Logs — Super Admin, Manager, CEO */}
+                        {/* System Logs — Super Admin, CEO */}
                         <Route
                             path="/logs"
                             element={
-                                <ProtectedRoute allowedRoles={['manager', 'super_admin', 'ceo']}>
+                                <ProtectedRoute allowedRoles={['super_admin', 'ceo']}>
                                     <SystemLogs />
                                 </ProtectedRoute>
                             }
                         />
 
-                        {/* Statistics — Super Admin, Manager, CEO */}
+                        {/* Statistics — Super Admin, CEO */}
                         <Route
                             path="/statistics"
                             element={
-                                <ProtectedRoute allowedRoles={['manager', 'super_admin', 'ceo']}>
+                                <ProtectedRoute allowedRoles={['super_admin', 'ceo']}>
                                     <StatisticsDashboard />
                                 </ProtectedRoute>
                             }

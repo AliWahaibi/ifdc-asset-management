@@ -36,6 +36,12 @@ type StatisticsResponse struct {
 
 // GetStatistics aggregates data across tables for the analytics dashboard
 func GetStatistics(c *gin.Context) {
+	userRole := c.GetString("userRole")
+	if userRole != "super_admin" && userRole != "ceo" && userRole != "CEO" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized: Global statistics are restricted to CEO and Super Admin"})
+		return
+	}
+
 	var resp StatisticsResponse
 
 	// 1. Top Users

@@ -8,13 +8,15 @@ import (
 
 	"ifdc-backend/internal/database"
 	"ifdc-backend/internal/models"
-
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/microcosm-cc/bluemonday"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/disintegration/imaging"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/microcosm-cc/bluemonday"
+	"mime/multipart"
 )
  
 // GetUniqueAssetTypes retrieves unique classification strings for frontend suggestions
@@ -32,6 +34,37 @@ func GetUniqueAssetTypes(c *gin.Context) {
 		"accessory_types": accessoryTypes,
 		"rnd_asset_types": rndTypes,
 	})
+}
+
+// GetAvailableAssetsPublic returns a simplified list of available assets for public reservation
+func GetAvailableAssetsPublic(c *gin.Context) {
+	assetType := c.Query("type")
+	if assetType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "type parameter is required"})
+		return
+	}
+
+	var results []struct {
+		ID           string `json:"id"`
+		Name         string `json:"name"`
+		LicensePlate string `json:"license_plate,omitempty"`
+	}
+
+	switch assetType {
+	case "drone":
+		database.DB.Model(&models.DroneAsset{}).Where("status = ?", "Available").Select("id, name").Find(&results)
+	case "office":
+		database.DB.Model(&models.OfficeAsset{}).Where("status = ?", "available").Select("id, name").Find(&results)
+	case "rnd":
+		database.DB.Model(&models.RndAsset{}).Where("status = ?", "available").Select("id, name").Find(&results)
+	case "vehicle":
+		database.DB.Model(&models.VehicleAsset{}).Where("status = ?", "available").Select("id, name, license_plate").Find(&results)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid asset type"})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }
 
 // Helper to save uploaded files
@@ -64,19 +97,45 @@ func saveUploadedFile(c *gin.Context, fieldName string, uploadDir string, allowe
 	filename := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), filepath.Ext(header.Filename))
 	savePath := filepath.Join(uploadDir, filename)
 
-	out, err := os.Create(savePath)
-	if err != nil {
-		return "", err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, file); err != nil {
+	if err := CompressAndSaveImage(file, header, savePath); err != nil {
 		return "", err
 	}
 
 	// Return relative path
-	// Assuming the app serves /uploads/ as static
 	return fmt.Sprintf("/%s/%s", uploadDir, filename), nil
+}
+
+
+// CompressAndSaveImage helper for reusable compression
+func CompressAndSaveImage(file multipart.File, header *multipart.FileHeader, savePath string) error {
+	// Try to decode as image for compression
+	img, err := imaging.Decode(file)
+	if err != nil {
+		// If decoding fails, try to seek to start to copy as raw file (e.g. PDF)
+		if seeker, ok := file.(io.Seeker); ok {
+			seeker.Seek(0, 0)
+		}
+
+		out, err := os.Create(savePath)
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, file); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// It is an image, compress and save as JPEG
+	bounds := img.Bounds()
+	if bounds.Dx() > 1600 {
+		img = imaging.Resize(img, 1600, 0, imaging.Lanczos)
+	}
+
+	// Save with 75% quality
+	return imaging.Save(img, savePath, imaging.JPEGQuality(75))
 }
 
 // GetDrones retrieves paginated drones
@@ -98,7 +157,14 @@ func GetDrones(c *gin.Context) {
 
 	query := database.DB.Model(&models.DroneAsset{})
 	if search != "" {
-		query = query.Where("name ILIKE ? OR serial_number ILIKE ?", "%"+search+"%", "%"+search+"%")
+		s := "%" + search + "%"
+		query = query.Where("name ILIKE ? OR serial_number ILIKE ?", s, s)
+	}
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if model := c.Query("model"); model != "" {
+		query = query.Where("model = ?", model)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -148,6 +214,12 @@ func GetOfficeAssets(c *gin.Context) {
 	if search != "" {
 		s := "%" + search + "%"
 		query = query.Where("name ILIKE ? OR serial_number ILIKE ? OR reference_number ILIKE ?", s, s, s)
+	}
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if category := c.Query("category"); category != "" {
+		query = query.Where("category = ?", category)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -206,7 +278,14 @@ func GetRndAssets(c *gin.Context) {
 
 	query := database.DB.Model(&models.RndAsset{})
 	if search != "" {
-		query = query.Where("name ILIKE ? OR serial_number ILIKE ?", "%"+search+"%", "%"+search+"%")
+		s := "%" + search + "%"
+		query = query.Where("name ILIKE ? OR serial_number ILIKE ?", s, s)
+	}
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if assetType := c.Query("asset_type"); assetType != "" {
+		query = query.Where("asset_type = ?", assetType)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

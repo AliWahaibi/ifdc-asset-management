@@ -177,6 +177,8 @@ export function ProjectAdmissionsList() {
             render: (row: Admission) => (
                 <div className="flex items-center gap-2">
                     {row.status === 'pending' && (
+                        (['super_admin', 'ceo', 'CEO'].includes(currentUser?.role || '') || 
+                         (['manager', 'team_leader'].includes(currentUser?.role || '') && row.user?.department === currentUser?.department)) && (
                         <>
                             <button
                                 onClick={() => handleStatusUpdate(row.id, 'approved')}
@@ -193,6 +195,7 @@ export function ProjectAdmissionsList() {
                                 <X className="h-4 w-4" />
                             </button>
                         </>
+                        )
                     )}
                     {row.status === 'pending_acceptance' && row.assigned_to_id === currentUser?.id && (
                         <button

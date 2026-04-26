@@ -93,3 +93,122 @@
         transform: translateY(0);
     }
 }
+
+/* ===== React Big Calendar Dark Theme ===== */
+.calendar-dark {
+    @apply h-full w-full;
+}
+
+.calendar-dark .rbc-calendar {
+    background-color: transparent;
+    color: #f1f5f9;
+    font-family: inherit;
+}
+
+.calendar-dark .rbc-month-view, 
+.calendar-dark .rbc-time-view,
+.calendar-dark .rbc-agenda-view {
+    border: 1px solid #1e293b;
+    border-radius: 1rem;
+    overflow: hidden;
+    background-color: #0f172a;
+}
+
+.calendar-dark .rbc-header {
+    border-bottom: 1px solid #1e293b;
+    padding: 12px 0;
+    color: #94a3b8;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+}
+
+.calendar-dark .rbc-header + .rbc-header {
+    border-left: 1px solid #1e293b;
+}
+
+.calendar-dark .rbc-day-bg + .rbc-day-bg {
+    border-left: 1px solid #1e293b;
+}
+
+.calendar-dark .rbc-month-row + .rbc-month-row {
+    border-top: 1px solid #1e293b;
+}
+
+.calendar-dark .rbc-today {
+    background-color: rgba(6, 182, 212, 0.03);
+}
+
+.calendar-dark .rbc-off-range-bg {
+    background-color: rgba(2, 6, 23, 0.4);
+}
+
+.calendar-dark .rbc-event {
+    border-radius: 6px;
+    border: none;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.calendar-dark .rbc-show-more {
+    color: #06b6d4;
+    font-weight: 700;
+    font-size: 0.7rem;
+    background: transparent;
+}
+
+.calendar-dark .rbc-toolbar {
+    margin-bottom: 1.5rem;
+}
+
+.calendar-dark .rbc-toolbar-label {
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #f8fafc;
+}
+
+.calendar-dark .rbc-toolbar button {
+    color: #94a3b8;
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 0.75rem;
+    padding: 6px 16px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.calendar-dark .rbc-toolbar button:hover {
+    background-color: #334155;
+    color: white;
+    border-color: #475569;
+}
+
+.calendar-dark .rbc-toolbar button.rbc-active {
+    background-color: #06b6d4;
+    border-color: #06b6d4;
+    color: white;
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+.calendar-dark .rbc-button-group + .rbc-button-group {
+    margin-left: 10px;
+}
+
+.calendar-dark .rbc-month-row {
+    min-height: 100px;
+}
+
+.calendar-dark .rbc-date-cell {
+    padding: 8px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.calendar-dark .rbc-date-cell.rbc-now {
+    color: #06b6d4;
+}

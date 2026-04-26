@@ -43,6 +43,10 @@ func GetVehicleAssets(c *gin.Context) {
 		query = query.Where("name ILIKE ? OR license_plate ILIKE ?", searchPattern, searchPattern)
 	}
 
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+
 	if err := query.Count(&total).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count assets"})
 		return
@@ -181,13 +185,16 @@ func CreateVehicleAsset(c *gin.Context) {
 		filename := fmt.Sprintf("%s_%d_ins_%s", uuid.New().String(), time.Now().Unix(), filepath.Base(fileHeader.Filename))
 		savePath := filepath.Join(uploadDir, filename)
 		
-		if err := c.SaveUploadedFile(fileHeader, savePath); err == nil {
-			vImg := models.VehicleImage{
-				VehicleAssetID: asset.ID,
-				ImageURL:       fmt.Sprintf("/%s/%s", uploadDir, filename),
+		if f, err := fileHeader.Open(); err == nil {
+			defer f.Close()
+			if err := CompressAndSaveImage(f, fileHeader, savePath); err == nil {
+				vImg := models.VehicleImage{
+					VehicleAssetID: asset.ID,
+					ImageURL:       fmt.Sprintf("/%s/%s", uploadDir, filename),
+				}
+				tx.Create(&vImg)
+				count++
 			}
-			tx.Create(&vImg)
-			count++
 		}
 	}
 
@@ -213,19 +220,39 @@ func UpdateVehicleAsset(c *gin.Context) {
 		return
 	}
 
-	var updateData models.VehicleAsset
-	if err := c.ShouldBindJSON(&updateData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Support both JSON and Form (Frontend sends FormData)
+	if strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
+		if name := c.PostForm("name"); name != "" {
+			asset.Name = name
+		}
+		if plate := c.PostForm("license_plate"); plate != "" {
+			asset.LicensePlate = plate
+		}
+		if ref := c.PostForm("reference_number"); ref != "" {
+			asset.ReferenceNumber = ref
+		}
+		if status := c.PostForm("status"); status != "" {
+			asset.Status = status
+		}
+		if mileageStr := c.PostForm("mileage"); mileageStr != "" {
+			if m, err := strconv.ParseFloat(mileageStr, 64); err == nil {
+				asset.Mileage = m
+			}
+		}
+		if notes := c.PostForm("notes"); notes != "" {
+			asset.Notes = notes
+		}
+	} else {
+		var updateData models.VehicleAsset
+		if err := c.ShouldBindJSON(&updateData); err == nil {
+			asset.Name = updateData.Name
+			asset.LicensePlate = updateData.LicensePlate
+			asset.ReferenceNumber = updateData.ReferenceNumber
+			asset.Status = updateData.Status
+			asset.Mileage = updateData.Mileage
+			asset.Notes = updateData.Notes
+		}
 	}
-
-	// Update fields
-	asset.Name = updateData.Name
-	asset.LicensePlate = updateData.LicensePlate
-	asset.ReferenceNumber = updateData.ReferenceNumber
-	asset.Status = updateData.Status
-	asset.Mileage = updateData.Mileage
-	asset.Notes = updateData.Notes
 
 	if err := database.DB.Save(&asset).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset"})

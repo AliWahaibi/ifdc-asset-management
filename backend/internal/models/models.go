@@ -34,11 +34,12 @@ type LeaveRequest struct {
 	ID                 string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
 	UserID             string         `gorm:"type:uuid;not null;index" json:"user_id"`
 	User               User           `gorm:"foreignKey:UserID" json:"user"`
-	LeaveType          string         `gorm:"not null;default:'annual'" json:"leave_type"` // annual, sick, emergency, special
+	LeaveType          string         `gorm:"not null;default:'annual'" json:"leave_type"` // annual, sick, emergency, special, sick_companion
 	SpecialLeaveReason string         `json:"special_leave_reason"`
 	StartDate          time.Time      `gorm:"not null" json:"start_date"`
 	EndDate            time.Time      `gorm:"not null" json:"end_date"`
 	Status             string         `gorm:"not null;default:'pending_manager'" json:"status"` // pending_manager, pending_ceo, approved, rejected, cancelled
+	PendingApprovalBy  string         `gorm:"not null;default:'manager'" json:"pending_approval_by"` // manager, hr, ceo
 	TotalDays          int            `gorm:"not null" json:"total_days"`
 	Reason             string         `json:"reason"`
 	AttachmentURL      string         `json:"attachment_url"`
@@ -130,21 +131,24 @@ type RndAsset struct {
 }
 
 type Reservation struct {
-	ID        string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	UserID    string         `gorm:"type:uuid;not null" json:"user_id"`
-	User      User           `gorm:"foreignKey:UserID" json:"user"`
-	AssetType string         `gorm:"not null" json:"asset_type"` // drone, office, rnd
-	AssetID   string         `gorm:"type:uuid;not null" json:"asset_id"`
-	AssetName string         `gorm:"-" json:"asset_name"`
-	StartDate time.Time      `gorm:"not null" json:"start_date"`
-	EndDate   time.Time      `gorm:"not null" json:"end_date"`
-	Status    string         `gorm:"not null;default:'pending'" json:"status"` // pending, approved, rejected, completed, cancelled
-	Notes     string         `json:"notes"`
-	ProjectID *string        `gorm:"type:uuid" json:"project_id"`
-	Project   *Project       `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                   string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	UserID               *string        `gorm:"type:uuid" json:"user_id"`
+	User                 *User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	AssetType            string         `gorm:"not null" json:"asset_type"` // drone, office, rnd, vehicle
+	AssetID              string         `gorm:"type:uuid;not null" json:"asset_id"`
+	AssetName            string         `gorm:"-" json:"asset_name"`
+	StartDate            time.Time      `gorm:"not null" json:"start_date"`
+	EndDate              time.Time      `gorm:"not null" json:"end_date"`
+	Status               string         `gorm:"not null;default:'pending'" json:"status"` // pending, approved, rejected, completed, cancelled
+	Notes                string         `json:"notes"`
+	IsExternal           bool           `gorm:"default:false" json:"is_external"`
+	ExternalOrgName      string         `json:"external_org_name"`
+	ExternalContactEmail string         `json:"external_contact_email"`
+	ProjectID            *string        `gorm:"type:uuid" json:"project_id"`
+	Project              *Project       `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	DeletedAt            gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 type Project struct {
