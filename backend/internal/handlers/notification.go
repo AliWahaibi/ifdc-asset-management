@@ -90,8 +90,16 @@ func MarkNotificationRead(c *gin.Context) {
 }
 // GetNotificationSummary returns a summary of pending items for the current user (e.g. pending leaves)
 func GetNotificationSummary(c *gin.Context) {
-	userRole, _ := c.Get("role")
-	role := userRole.(string)
+	userRoleInterface, exists := c.Get("userRole")
+	if !exists || userRoleInterface == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Missing required user context"})
+		return
+	}
+	role, ok := userRoleInterface.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid context data type"})
+		return
+	}
 
 	summary := gin.H{
 		"pending_leaves":     0,
