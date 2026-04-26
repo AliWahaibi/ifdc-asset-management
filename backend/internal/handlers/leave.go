@@ -299,13 +299,14 @@ func UpdateLeaveStatus(c *gin.Context) {
 			return
 		}
 
-		if userRole == "super_admin" || userRole == "ceo" || userRole == "CEO" {
+		switch {
+		case userRole == "super_admin" || userRole == "ceo" || userRole == "CEO":
 			// CEO/Super Admin can approve anything pending
 			canApprove = true
 			leave.CEOComment = input.Comment
-		} else if userRole == "hr" && leave.Status == "pending_hr" {
+		case userRole == "hr" && leave.Status == "pending_hr":
 			canApprove = true
-		} else if (userRole == "manager" || userRole == "team_leader") && leave.Status == "pending_manager" {
+		case (userRole == "manager" || userRole == "team_leader") && leave.Status == "pending_manager":
 			// Team Leader or Manager Approval (first stage) restricted to their department
 			var approver models.User
 			database.DB.First(&approver, "id = ?", userID)

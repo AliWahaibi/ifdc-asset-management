@@ -392,7 +392,18 @@ export function UsersDashboard() {
                         </div>
                     </div>
                     <div className="flex-1 p-0 overflow-y-auto bg-slate-900/50">
-                        <iframe src={formatFileUrl(viewingDoc.url)} className="w-full h-full border-0 min-h-[600px]" title={viewingDoc.name} />
+                        {viewingDoc.url ? (
+                            <iframe 
+                                src={formatFileUrl(viewingDoc.url)} 
+                                className="w-full h-full border-0 min-h-[600px] bg-white" 
+                                title={viewingDoc.name} 
+                            />
+                        ) : (
+                            <div className="h-full min-h-[600px] flex flex-col items-center justify-center text-slate-500 gap-4">
+                                <FileText className="h-16 w-16 opacity-20" />
+                                <p className="text-lg font-medium">No document uploaded</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
