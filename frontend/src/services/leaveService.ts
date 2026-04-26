@@ -27,5 +27,10 @@ export const leaveService = {
             params: userId ? { user_id: userId } : {}
         });
         return response.data;
+    },
+
+    getBlackoutDates: async () => {
+        const response = await api.get<any[]>('/settings/blackout-dates');
+        return response.data;
     }
 };

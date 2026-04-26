@@ -1,23 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar';
-import { format, parse, startOfWeek, getDay } from 'date-fns';
-import { enUS } from 'date-fns/locale';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
+import { parse } from 'date-fns';
 import { leaveService } from '@/services/leaveService';
-import type { LeaveRequest } from '@/types';
 import { Calendar } from 'lucide-react';
-
-const locales = {
-    'en-US': enUS,
-};
-
-const localizer = dateFnsLocalizer({
-    format,
-    parse,
-    startOfWeek,
-    getDay,
-    locales,
-});
+import { SharedCalendar } from '@/components/ui/SharedCalendar';
 
 export function AdminLeaveDashboard() {
     const [events, setEvents] = useState<any[]>([]);
@@ -34,29 +19,51 @@ export function AdminLeaveDashboard() {
     const fetchLeaves = async () => {
         try {
             setLoading(true);
-            const data = await leaveService.getAllLeaves(filters);
+            const [leavesData, blackoutData] = await Promise.all([
+                leaveService.getAllLeaves(filters),
+                leaveService.getBlackoutDates()
+            ]);
             
-            // Deduplicate and format for React Big Calendar
-            const uniqueData = Array.from(new Map(data.map((item: any) => [item.id, item])).values());
+            // Deduplicate leaves
+            const uniqueLeaves = Array.from(new Map(leavesData.map((item: any) => [item.id, item])).values());
             
-            const formattedEvents = uniqueData.map((leave: any) => ({
+            const parseDate = (dateStr: string) => {
+                const d = new Date(dateStr);
+                if (!isNaN(d.getTime())) return d;
+                try {
+                    return parse(dateStr, 'dd/MM/yyyy', new Date());
+                } catch (e) {
+                    return new Date();
+                }
+            };
+            
+            const leaveEvents = uniqueLeaves.map((leave: any) => ({
                 id: leave.id,
                 title: `${leave.user?.full_name || 'Unknown'} (${leave.leave_type})`,
-                start: new Date(leave.start_date),
-                end: new Date(leave.end_date),
+                start: parseDate(leave.start_date),
+                end: parseDate(leave.end_date),
                 allDay: true,
+                isBlackout: false,
                 resource: leave
             }));
+
+            const blackoutEvents = blackoutData.map((b: any) => ({
+                id: b.id,
+                title: `BLACKOUT: ${b.reason}`,
+                start: parseDate(b.start_date),
+                end: parseDate(b.end_date),
+                allDay: true,
+                isBlackout: true,
+                resource: b
+            }));
             
-            setEvents(formattedEvents);
+            setEvents([...leaveEvents, ...blackoutEvents]);
         } catch (error) {
-            console.error('Failed to fetch leaves', error);
+            console.error('Failed to fetch calendar data', error);
         } finally {
             setLoading(false);
         }
     };
-
-
 
     return (
         <div className="space-y-8 animate-fade-in py-6">
@@ -92,36 +99,35 @@ export function AdminLeaveDashboard() {
                     />
                 </div>
 
-                <div className="h-[700px] calendar-dark">
-                    {loading ? (
-                        <div className="h-full flex items-center justify-center">
-                            <div className="h-10 w-10 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
-                        </div>
-                    ) : (
-                        <BigCalendar
-                            localizer={localizer}
-                            events={events}
-                            startAccessor="start"
-                            endAccessor="end"
-                            style={{ height: '100%' }}
-                            views={['month', 'week', 'day']}
-                            eventPropGetter={(event) => {
-                                const leaveType = event.resource.leave_type;
-                                let background = 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)'; // default/annual
-                                
-                                if (leaveType === 'sick') {
-                                    background = 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)';
-                                } else if (leaveType === 'emergency') {
-                                    background = 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)';
-                                } else if (leaveType === 'sick_companion' || leaveType === 'special') {
-                                    background = 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)';
+                <SharedCalendar 
+                    events={events}
+                    loading={loading}
+                    eventPropGetter={(event) => {
+                        if (event.isBlackout) {
+                            return {
+                                style: {
+                                    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                                    border: '1px solid #334155',
+                                    color: '#94a3b8',
+                                    opacity: 0.8
                                 }
-                                
-                                return { style: { background } };
-                            }}
-                        />
-                    )}
-                </div>
+                            };
+                        }
+
+                        const leaveType = event.resource.leave_type;
+                        let background = 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)'; // default/annual
+                        
+                        if (leaveType === 'sick') {
+                            background = 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)';
+                        } else if (leaveType === 'emergency') {
+                            background = 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)';
+                        } else if (leaveType === 'sick_companion' || leaveType === 'special') {
+                            background = 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)';
+                        }
+                        
+                        return { style: { background, border: 'none' } };
+                    }}
+                />
             </div>
         </div>
     );
