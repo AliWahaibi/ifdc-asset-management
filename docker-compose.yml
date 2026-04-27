@@ -38,6 +38,8 @@ services:
     # Removed public port 8080 for security (Nginx handles proxying now)
     expose:
       - "8080"
+    volumes:
+      - backend_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,6 +98,7 @@ services:
 
 volumes:
   postgres_data:
+  backend_uploads:
 
 
 networks:

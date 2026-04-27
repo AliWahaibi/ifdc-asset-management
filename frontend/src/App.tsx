@@ -16,6 +16,7 @@ const TimelineCalendar = lazy(() => import('@/pages/TimelineCalendar').then(m =>
 const UserProfile = lazy(() => import('@/pages/UserProfile').then(m => ({ default: m.UserProfile })));
 const SystemSettings = lazy(() => import('@/pages/SystemSettings').then(m => ({ default: m.SystemSettings })));
 const SystemLogs = lazy(() => import('@/pages/SystemLogs').then(m => ({ default: m.SystemLogs })));
+const AuditLogsPage = lazy(() => import('@/pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
 const StatisticsDashboard = lazy(() => import('@/pages/StatisticsDashboard').then(m => ({ default: m.StatisticsDashboard })));
 const AIAssistant = lazy(() => import('@/pages/AIAssistant').then(m => ({ default: m.AIAssistant })));
 const ProjectAdmission = lazy(() => import('@/pages/ProjectAdmission').then(m => ({ default: m.ProjectAdmission })));
@@ -132,6 +133,16 @@ export function App() {
                             element={
                                 <ProtectedRoute allowedRoles={['super_admin', 'ceo']}>
                                     <SystemLogs />
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        {/* Audit Logs — Super Admin, CEO */}
+                        <Route
+                            path="/audit-logs"
+                            element={
+                                <ProtectedRoute allowedRoles={['super_admin', 'ceo']}>
+                                    <AuditLogsPage />
                                 </ProtectedRoute>
                             }
                         />

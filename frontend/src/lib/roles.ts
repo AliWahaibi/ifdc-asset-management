@@ -8,7 +8,10 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
     employee: 0,
     team_leader: 1,
     manager: 2,
-    super_admin: 3,
+    hr: 2,
+    ceo: 3,
+    CEO: 3,
+    super_admin: 4,
 };
 
 /**
@@ -19,6 +22,9 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     manager: 'Manager',
     team_leader: 'Team Leader',
     employee: 'Employee',
+    hr: 'HR',
+    ceo: 'CEO',
+    CEO: 'CEO',
 };
 
 /**

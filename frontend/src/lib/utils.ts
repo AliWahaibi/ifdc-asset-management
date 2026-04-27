@@ -16,11 +16,16 @@ export function formatFileUrl(rawUrl: string | undefined | null): string {
     // 1. Strip hardcoded local domains if present
     const cleanUrl = rawUrl.replace(/^http:\/\/localhost:8080/, '');
     
-    // 2. Prepend dynamic API URL from environment variables
-    const baseUrl = import.meta.env.VITE_API_URL || '';
-    
     // Ensure cleanUrl starts with / if it doesn't already
     const path = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
     
+    // 2. Upload paths (/uploads/...) are served directly by nginx proxy,
+    //    NOT through the /api base. Return them as relative paths.
+    if (path.startsWith('/uploads/')) {
+        return path;
+    }
+    
+    // 3. For other paths, prepend the API base URL
+    const baseUrl = import.meta.env.VITE_API_URL || '';
     return `${baseUrl}${path}`;
 }

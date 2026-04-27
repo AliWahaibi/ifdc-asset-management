@@ -1,6 +1,6 @@
 // ===== Enums =====
 
-export type UserRole = 'super_admin' | 'manager' | 'team_leader' | 'employee' | 'hr' | 'ceo';
+export type UserRole = 'super_admin' | 'manager' | 'team_leader' | 'employee' | 'hr' | 'ceo' | 'CEO';
 
 export type AssetStatus = 'available' | 'in_use' | 'maintenance' | 'retired' | 'reserved';
 
@@ -13,6 +13,17 @@ export type LeaveStatus = 'pending_manager' | 'pending_ceo' | 'approved' | 'reje
 export type AssetType = 'drone' | 'office' | 'rnd' | 'vehicle';
 
 export type AdmissionStatus = 'pending_acceptance' | 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+
+export interface AuditLog {
+    id: number;
+    user_id: string;
+    user?: User;
+    action_type: string;
+    entity_type: string;
+    entity_id: string;
+    details: Record<string, any>;
+    created_at: string;
+}
 
 // ===== Core Entities =====
 

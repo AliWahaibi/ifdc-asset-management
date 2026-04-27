@@ -22,6 +22,7 @@ import {
     Briefcase,
     Car,
     Plus,
+    Activity,
 } from 'lucide-react';
 import mainLogo from '@/assets/Asset 2.png';
 
@@ -100,6 +101,12 @@ const NAV_ITEMS: NavItem[] = [
         label: 'User Management',
         path: '/users',
         icon: <Users className="h-5 w-5" />,
+        roles: ['super_admin', 'ceo'],
+    },
+    {
+        label: 'Audit Logs',
+        path: '/audit-logs',
+        icon: <Activity className="h-5 w-5" />,
         roles: ['super_admin', 'ceo'],
     },
     {

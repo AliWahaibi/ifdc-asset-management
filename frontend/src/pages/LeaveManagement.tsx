@@ -5,7 +5,7 @@ import type { LeaveRequest, LeaveBalance } from '@/types';
 import { 
     Calendar, 
     Clock, 
-    CheckCircle2, 
+    CheckCircle2,
     XCircle, 
     Plus, 
     Info, 
@@ -223,10 +223,10 @@ export function LeaveManagement() {
                         <Calendar className="h-16 w-16 text-cyan-400" />
                     </div>
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Annual Balance</p>
-                    <h3 className="text-3xl font-black text-white mt-1">{balance?.annual_balance || 30} <span className="text-sm font-medium text-slate-400 tracking-normal italic">working days</span></h3>
+                    <h3 className="text-3xl font-black text-white mt-1">{balance?.annual_balance || 23} <span className="text-sm font-medium text-slate-400 tracking-normal italic">working days</span></h3>
                     <div className="mt-4 flex items-center gap-2 text-[10px] text-cyan-400/70">
                         <Info className="h-3 w-3" />
-                        Excludes Fri-Sat weekend (Oman)
+                        Excludes Fri-Sat weekend
                     </div>
                 </div>
 
@@ -239,19 +239,8 @@ export function LeaveManagement() {
                     <div className="mt-4 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                         <div 
                             className="h-full bg-violet-500 transition-all duration-1000"
-                            style={{ width: `${((balance?.used_annual || 0) / (balance?.annual_balance || 30)) * 100}%` }}
+                            style={{ width: `${((balance?.used_annual || 0) / (balance?.annual_balance || 23)) * 100}%` }}
                         />
-                    </div>
-                </div>
-
-                <div className="glass-panel p-6 relative overflow-hidden group border-emerald-500/20">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                        <CheckCircle2 className="h-16 w-16 text-emerald-400" />
-                    </div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Remaining Balance</p>
-                    <h3 className="text-3xl font-black text-emerald-400 mt-1">{balance?.remaining_annual ?? '--'} <span className="text-sm font-medium text-slate-400 tracking-normal italic">days</span></h3>
-                    <div className="mt-4 flex items-center gap-2 text-[10px] text-emerald-400/70">
-                        Available for request
                     </div>
                 </div>
 

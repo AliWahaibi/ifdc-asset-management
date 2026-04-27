@@ -53,6 +53,7 @@ func main() {
 		&models.BlackoutDate{},
 		&models.ReferenceSequence{},
 		&models.VehicleImage{},
+		&models.AuditLog{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)

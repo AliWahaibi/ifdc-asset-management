@@ -247,7 +247,7 @@ func GetAllLeaves(c *gin.Context) {
 		query = query.Where("end_date <= ?", endDate)
 	}
 
-	if err := query.Order("start_date desc").Find(&requests).Error; err != nil {
+	if err := query.Where("leave_requests.status NOT IN ('rejected', 'cancelled')").Order("start_date desc").Find(&requests).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave requests"})
 		return
 	}
@@ -362,14 +362,14 @@ func GetLeaveBalance(c *gin.Context) {
 		Select("COALESCE(SUM(total_days), 0)").
 		Row().Scan(&totalSick)
 
-	annualBalance := int64(30) - totalAnnual
+	annualBalance := int64(23) - totalAnnual
 	if annualBalance < 0 {
 		annualBalance = 0
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":          userID,
-		"annual_balance":   30, // 30 Calendar Days
+		"annual_balance":   23, // 23 Working Days
 		"used_annual":      totalAnnual,
 		"remaining_annual": annualBalance,
 		"used_sick":        totalSick,

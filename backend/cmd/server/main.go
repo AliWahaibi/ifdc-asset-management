@@ -137,13 +137,15 @@ func SetupRouter() *gin.Engine {
 			vehicles.POST("/assets", handlers.CreateVehicleAsset)
 			vehicles.PUT("/assets/:id", handlers.UpdateVehicleAsset)
 			vehicles.DELETE("/assets/:id", handlers.DeleteVehicleAsset)
+			vehicles.POST("/:id/dispatch", handlers.DispatchVehicle)
 		}
 
 		// Dashboard activities
 		api.GET("/dashboard/activities", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetActivities)
 
-		// System Logs
+		// System Logs & Audit Logs
 		api.GET("/logs", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetLogs)
+		api.GET("/audit-logs", middleware.RequireAuth(), middleware.RBACMiddleware(), handlers.GetAuditLogs)
 
 		// System Settings
 		settings := api.Group("/settings")

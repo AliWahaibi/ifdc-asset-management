@@ -287,3 +287,54 @@ func DeleteVehicleAsset(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Asset deleted successfully"})
 }
+
+// DispatchVehicle handles the dispatching of a vehicle asset and logs the event using the audit system
+func DispatchVehicle(c *gin.Context) {
+	id := c.Param("id")
+	
+	var req struct {
+		Destination string `json:"destination" binding:"required"`
+		Reason      string `json:"reason" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var asset models.VehicleAsset
+	if err := database.DB.First(&asset, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vehicle not found"})
+		return
+	}
+
+	if asset.Status != "available" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vehicle is not available for dispatch"})
+		return
+	}
+
+	// Update asset status
+	asset.Status = "in_use"
+	if err := database.DB.Save(&asset).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to dispatch vehicle"})
+		return
+	}
+
+	// Record the event in the Audit Log
+	userID := c.GetString("userID")
+	detailsMap := map[string]interface{}{
+		"destination":   req.Destination,
+		"reason":        req.Reason,
+		"vehicle_name":  asset.Name,
+		"license_plate": asset.LicensePlate,
+		"previous_state": "available",
+		"new_state":     "in_use",
+	}
+
+	database.LogEvent(database.DB, &userID, "vehicle_dispatch", "vehicle", id, detailsMap)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Vehicle dispatched successfully",
+		"asset":   asset,
+	})
+}

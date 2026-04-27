@@ -31,6 +31,7 @@ interface Admission {
         id: string;
         full_name: string;
         email: string;
+        department?: string;
     };
     assigned_to_id?: string;
     assigned_to?: {
